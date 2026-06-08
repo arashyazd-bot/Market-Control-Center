@@ -74,7 +74,7 @@ def _layout(**extra) -> dict:
         height=320,
         hovermode="x unified",
         dragmode="pan",          # click-drag pans; scroll/pinch zooms
-        font=dict(size=14, color=fc, family="Barlow, system-ui, sans-serif"),
+        font=dict(size=13, color=fc, family="Figtree, system-ui, sans-serif"),
         xaxis=dict(gridcolor=gc, zerolinecolor=gc, tickfont=dict(size=13)),
         yaxis=dict(gridcolor=gc, zerolinecolor=gc, tickfont=dict(size=13)),
         legend=dict(font=dict(size=13)),

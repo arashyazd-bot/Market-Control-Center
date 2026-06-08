@@ -46,7 +46,7 @@ def fear_greed_gauge(score: float, rating: str) -> go.Figure:
         margin=dict(l=20, r=20, t=65, b=10),
         template=_template(),
         paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(color=fc),
+        font=dict(color=fc, family="Figtree, system-ui, sans-serif"),
     )
     return fig
 
@@ -77,6 +77,6 @@ def regime_gauge(score: float, label: str, color: str) -> go.Figure:
         margin=dict(l=20, r=20, t=75, b=10),
         template=_template(),
         paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(color=fc),
+        font=dict(color=fc, family="Figtree, system-ui, sans-serif"),
     )
     return fig
