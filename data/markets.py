@@ -25,7 +25,7 @@ def price_history(ticker: str, period: str = "1y") -> DataResult:
     if yf is None:
         return DataResult(sample.price_history(ticker), is_sample=True, note="yfinance missing")
     try:
-        df = yf.Ticker(ticker).history(period=period, auto_adjust=True)
+        df = yf.Ticker(ticker).history(period=period, auto_adjust=True, timeout=6)
         if df is None or df.empty or "Close" not in df:
             raise ValueError("no data")
         df = df[["Close"]].copy()
@@ -59,7 +59,8 @@ def sector_performance() -> DataResult:
         return DataResult(sample.sector_performance(), is_sample=True, note="yfinance missing")
     try:
         tickers = list(config.SECTORS.keys())
-        data = yf.download(tickers, period="1y", auto_adjust=True, progress=False)["Close"]
+        data = yf.download(tickers, period="1y", auto_adjust=True, progress=False,
+                           timeout=6)["Close"]
         if data is None or data.empty:
             raise ValueError("no data")
         data.index = pd.to_datetime(data.index).tz_localize(None)
