@@ -336,6 +336,7 @@ def main() -> None:
 
     _inject_css(dark)
     sidebar(dark)
+    panels.warm_caches()   # parallel prefetch so panels hit warm caches
     ticker_strip()
 
     st.markdown(f"""
