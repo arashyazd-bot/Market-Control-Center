@@ -337,7 +337,7 @@ def render_intelligence() -> None:
         x=df_pe["pe"], y=df_pe["sector"], orientation="h", marker_color=colors,
         text=[f"{v:.0f}×" for v in df_pe["pe"]], textposition="outside"))
     from components.charts import _layout as _cl
-    fig.update_layout(**_cl(height=400, margin=dict(l=40, r=40, t=20, b=30)))
+    fig.update_layout(**_cl(height=280, margin=dict(l=28, r=28, t=14, b=21)))
     fig.update_xaxes(title="Price / Earnings")
     _chart(fig, key="intel_sector_pe", kind="static")
     st.caption("Green <25× · amber 25–40× · red >40× (richly valued)")
@@ -366,7 +366,7 @@ def render_intelligence() -> None:
                      marker_color=chart_color("danger"))
         from components.charts import _layout as _cl
         fig2.update_layout(barmode="stack", title="Analyst ratings distribution",
-                           **_cl(height=320))
+                           **_cl(height=224))
         _chart(fig2, key="intel_ratings", kind="static")
     with a2:
         st.dataframe(table[["Symbol", "Rating", "Target Cons."]],
