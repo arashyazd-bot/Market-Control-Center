@@ -104,6 +104,39 @@ h3, h4, h5, h6 { font-size: 1.35rem !important; }
     color: var(--c-accent) !important;
 }
 
+/* ── Lazy-nav radio styled to look like the tab bar ── */
+[data-testid="stRadio"] > div[role="radiogroup"] {
+    flex-direction: row !important;
+    flex-wrap: wrap;
+    gap: 0.25rem !important;
+    align-items: flex-end;
+    border-bottom: 1px solid var(--c-border) !important;
+    margin-bottom: 0.6rem;
+}
+[data-testid="stRadio"] label {
+    margin: 0 !important;
+    padding: 6px 13px !important;
+    border-bottom: 2.5px solid transparent !important;
+    margin-bottom: -1px !important;
+    cursor: pointer;
+}
+[data-testid="stRadio"] label > div:first-child {   /* hide the radio dot */
+    display: none !important;
+}
+[data-testid="stRadio"] label p {
+    font-size: 1.05rem !important;
+    font-weight: 600 !important;
+    color: var(--c-sub) !important;
+    margin: 0 !important;
+}
+[data-testid="stRadio"] label:has(input:checked) {
+    border-bottom-color: var(--c-accent) !important;
+    background: var(--c-tab-active-bg) !important;
+}
+[data-testid="stRadio"] label:has(input:checked) p {
+    color: var(--c-accent) !important;
+}
+
 /* ── Buttons ── */
 .stButton > button {
     font-size: 1.0rem !important;
@@ -341,7 +374,6 @@ def main() -> None:
 
     _inject_css(dark)
     sidebar(dark)
-    panels.warm_caches()   # bounded parallel prefetch (<=4s, never blocks render)
     ticker_strip()
 
     st.markdown(f"""
@@ -357,24 +389,21 @@ def main() -> None:
 </div>
 """, unsafe_allow_html=True)
 
-    (tab_overview, tab_val, tab_sent, tab_rates, tab_cross,
-     tab_intel) = st.tabs([
-        "Overview", "Valuation", "Sentiment",
-        "Rates & Macro", "Cross-Asset", "Intelligence",
-    ])
-
-    with tab_overview:
-        panels.render_overview()
-    with tab_val:
-        panels.render_valuation()
-    with tab_sent:
-        panels.render_sentiment()
-    with tab_rates:
-        panels.render_rates_macro()
-    with tab_cross:
-        panels.render_crossasset_politics()
-    with tab_intel:
-        panels.render_intelligence()
+    # Lazy navigation: render ONLY the selected section, so a page load fetches
+    # just that section's data instead of all six tabs' (~5x fewer API calls —
+    # keeps the FMP free-tier daily quota from being exhausted). st.tabs would
+    # render every tab eagerly, which is what burned through the quota.
+    sections = {
+        "🧭 Overview": panels.render_overview,
+        "💰 Valuation": panels.render_valuation,
+        "😱 Sentiment": panels.render_sentiment,
+        "📈 Rates & Macro": panels.render_rates_macro,
+        "🌍 Cross-Asset": panels.render_crossasset_politics,
+        "💹 Intelligence": panels.render_intelligence,
+    }
+    active = st.radio("Section", list(sections), horizontal=True,
+                      label_visibility="collapsed", key="active_section")
+    sections[active]()
 
 
 if __name__ == "__main__":

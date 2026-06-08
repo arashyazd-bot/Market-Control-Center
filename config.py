@@ -4,9 +4,9 @@ composite-signal weights. Keep all "magic strings" here so panels stay declarati
 # ---------------------------------------------------------------------------
 # Cache TTLs (seconds)
 # ---------------------------------------------------------------------------
-TTL_MARKETS = 15 * 60      # intraday-ish market data
+TTL_MARKETS = 30 * 60      # intraday-ish market data (longer = fewer API calls)
 TTL_MACRO = 6 * 60 * 60    # slow-moving macro series
-TTL_SENTIMENT = 30 * 60    # sentiment feeds
+TTL_SENTIMENT = 60 * 60    # sentiment feeds
 
 # ---------------------------------------------------------------------------
 # FRED series IDs
