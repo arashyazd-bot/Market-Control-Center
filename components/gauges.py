@@ -22,7 +22,8 @@ def fear_greed_gauge(score: float, rating: str) -> go.Figure:
             ],
         },
     ))
-    fig.update_layout(height=260, margin=dict(l=20, r=20, t=60, b=10))
+    fig.update_layout(height=260, margin=dict(l=20, r=20, t=60, b=10),
+                      template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)")
     return fig
 
 
@@ -33,7 +34,7 @@ def regime_gauge(score: float, label: str, color: str) -> go.Figure:
         value=score,
         title={"text": f"Market Regime<br><span style='font-size:1.1em;color:{color}'>"
                        f"<b>{label}</b></span>"},
-        number={"valueformat": "+.2f", "font": {"size": 38, "color": color}},
+        number={"valueformat": ".2f", "font": {"size": 38, "color": color}},
         gauge={
             "axis": {"range": [-1, 1], "tickvals": [-1, -0.33, 0.33, 1]},
             "bar": {"color": color, "thickness": 0.25},
@@ -45,5 +46,6 @@ def regime_gauge(score: float, label: str, color: str) -> go.Figure:
             "threshold": {"line": {"color": "white", "width": 3}, "value": score},
         },
     ))
-    fig.update_layout(height=300, margin=dict(l=20, r=20, t=70, b=10))
+    fig.update_layout(height=300, margin=dict(l=20, r=20, t=70, b=10),
+                      template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)")
     return fig

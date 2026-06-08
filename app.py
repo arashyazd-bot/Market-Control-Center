@@ -29,13 +29,17 @@ def sidebar() -> None:
         st.caption("State of the US economy, markets & policy — at a glance.")
         st.divider()
 
-        has_key = bool(os.environ.get("FRED_API_KEY"))
-        if has_key:
+        has_fmp = bool(os.environ.get("FMP_API_KEY"))
+        has_fred = bool(os.environ.get("FRED_API_KEY"))
+        if has_fmp:
+            st.success("FMP key detected — live rates/macro via FMP (FRED fallback).")
+        elif has_fred:
             st.success("FRED API key detected — live macro data enabled.")
         else:
             st.warning(
-                "No FRED_API_KEY found. Running on **sample data** for macro/rates.\n\n"
-                "Get a free key at fredaccount.stlouisfed.org and add it to `.env`.")
+                "No FMP_API_KEY or FRED_API_KEY found. Running on **sample data** "
+                "for macro/rates.\n\nAdd a free FRED key (fredaccount.stlouisfed.org) "
+                "or an FMP key to `.env`.")
 
         st.divider()
         if st.button("🔄 Refresh data", width="stretch"):
@@ -47,7 +51,7 @@ def sidebar() -> None:
         st.markdown(
             "**Legend**\n\n"
             "🟢 live source &nbsp;·&nbsp; 🟡 sample fallback\n\n"
-            "Data: FRED · Yahoo Finance · CNN Fear & Greed")
+            "Data: FMP · FRED · Yahoo Finance · CNN Fear & Greed")
 
 
 def main() -> None:
@@ -57,9 +61,10 @@ def main() -> None:
         "Built for top-down allocation: gauge the regime, valuation, sentiment, "
         "rates, the business cycle, and cross-asset/policy risk on one screen.")
 
-    tab_overview, tab_val, tab_sent, tab_rates, tab_cross = st.tabs([
+    (tab_overview, tab_val, tab_sent, tab_rates, tab_cross,
+     tab_intel) = st.tabs([
         "🧭 Overview", "💰 Valuation", "😱 Sentiment & Internals",
-        "📈 Rates & Macro", "🌍 Cross-Asset & Politics",
+        "📈 Rates & Macro", "🌍 Cross-Asset & Politics", "💹 Market Intelligence",
     ])
 
     with tab_overview:
@@ -72,6 +77,8 @@ def main() -> None:
         panels.render_rates_macro()
     with tab_cross:
         panels.render_crossasset_politics()
+    with tab_intel:
+        panels.render_intelligence()
 
 
 if __name__ == "__main__":

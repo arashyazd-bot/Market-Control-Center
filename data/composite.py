@@ -6,7 +6,7 @@ from __future__ import annotations
 import streamlit as st
 
 import config
-from data import DataResult, fred, markets, sentiment, valuation
+from data import DataResult, macro, markets, sentiment, valuation
 from utils.formatting import clamp
 
 
@@ -34,14 +34,18 @@ def compute_regime() -> DataResult:
     is_sample = False
 
     # Yield-curve slope (10Y-2Y): inverted = risk-off.
-    spread = fred.get_series("spread_10y2y")
-    is_sample |= spread.is_sample
-    components["yield_curve"] = _lin(fred.latest(spread), low_score_at=-1.0, high_score_at=1.0)
+    curve = macro.yield_curve()
+    is_sample |= curve.is_sample
+    try:
+        slope = float(curve.data.get(10)) - float(curve.data.get(2))
+    except Exception:
+        slope = 0.0
+    components["yield_curve"] = _lin(slope, low_score_at=-1.0, high_score_at=1.0)
 
     # Credit spreads (HY OAS): tight = risk-on.
-    hy = fred.get_series("hy_oas")
+    hy = macro.series("hy_oas")
     is_sample |= hy.is_sample
-    components["credit"] = _lin(fred.latest(hy), low_score_at=config.HY_OAS_WIDE,
+    components["credit"] = _lin(macro.latest(hy), low_score_at=config.HY_OAS_WIDE,
                                 high_score_at=config.HY_OAS_TIGHT)
 
     # VIX: calm = risk-on.
@@ -67,9 +71,9 @@ def compute_regime() -> DataResult:
                                    high_score_at=config.CAPE_CHEAP)
 
     # Sahm rule: < 0.5 = no recession trigger = risk-on.
-    sahm = fred.get_series("sahm")
+    sahm = macro.series("sahm")
     is_sample |= sahm.is_sample
-    components["sahm"] = _lin(fred.latest(sahm), low_score_at=1.0, high_score_at=0.0)
+    components["sahm"] = _lin(macro.latest(sahm), low_score_at=1.0, high_score_at=0.0)
 
     # Weighted blend.
     total_w = sum(config.COMPOSITE_WEIGHTS.values())

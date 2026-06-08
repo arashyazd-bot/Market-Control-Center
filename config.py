@@ -49,10 +49,40 @@ FRED_SERIES = {
     # sentiment / policy
     "umich_sentiment": "UMCSENT",
     "policy_uncertainty": "USEPUINDXD",
+    # leading / housing / probability
+    "mortgage_30y": "MORTGAGE30US",
+    "recession_prob": "RECPROUSM156N",
     # valuation inputs
     "wilshire": "WILL5000PR",
     "gdp_nominal": "GDP",
 }
+
+# ---------------------------------------------------------------------------
+# Financial Modeling Prep (FMP) — optional live source (REST API).
+# Set FMP_API_KEY to enable. FMP takes priority over FRED for the keys below;
+# anything FMP lacks (credit spreads, Sahm, policy uncertainty) falls back to
+# FRED, then to bundled sample data.
+# ---------------------------------------------------------------------------
+FMP_BASE_URL = "https://financialmodelingprep.com/stable"
+
+# logical series key -> FMP economic-indicator name
+FMP_INDICATORS = {
+    "cpi": "CPI",
+    "unemployment": "unemploymentRate",
+    "fed_funds": "federalFunds",
+    "umich_sentiment": "consumerSentiment",
+    "initial_claims": "initialClaims",
+    "mortgage_30y": "30YearFixedRateMortgageAverage",
+    "recession_prob": "smoothedUSRecessionProbabilities",
+}
+FMP_REAL_GDP = "realGDP"  # level -> we derive SAAR growth from it
+
+# Mega-cap watchlist for the analyst spotlight (Market Intelligence tab).
+ANALYST_WATCHLIST = ["NVDA", "AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA"]
+
+# Substrings that mark leveraged/inverse ETFs we filter out of "market movers".
+MOVER_EXCLUDE = ["ETF", "Daily", "2X", "3X", "Bull", "Bear", "Leverage",
+                 "UltraShort", "Ultra", " Long ", " Short "]
 
 # ---------------------------------------------------------------------------
 # yfinance tickers
@@ -121,6 +151,15 @@ REGIME_BANDS = [
     (-1.01, -0.33, "Risk-Off", "#e63946"),
     (-0.33, 0.33, "Neutral", "#f4a261"),
     (0.33, 1.01, "Risk-On", "#2a9d8f"),
+]
+
+# NBER-dated US recessions (peak -> trough). Used to shade macro time-series
+# charts. Source: NBER Business Cycle Dating Committee.
+NBER_RECESSIONS = [
+    ("1990-07-01", "1991-03-31"),
+    ("2001-03-01", "2001-11-30"),
+    ("2007-12-01", "2009-06-30"),
+    ("2020-02-01", "2020-04-30"),
 ]
 
 # Reference levels used for point-in-time normalization
