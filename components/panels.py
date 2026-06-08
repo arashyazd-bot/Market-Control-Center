@@ -14,12 +14,28 @@ from data import composite, fmp, fred, macro, markets, sentiment, valuation
 from utils.formatting import fmt_delta, fmt_num, percentile_label
 
 
-_CHART_CONFIG = {
-    "scrollZoom": True,          # two-finger scroll/pinch to zoom timeline
+# Timelines + the sector-strength heatmap: zoom/pan via drag + modebar, but
+# scrollZoom is OFF so a two-finger page scroll over a chart never zooms it.
+_CONFIG_TIMELINE = {
+    "scrollZoom": False,
     "displayModeBar": True,
-    "modeBarButtonsToRemove": ["lasso2d", "select2d"],
+    "modeBarButtonsToRemove": ["lasso2d", "select2d", "autoScale2d"],
     "displaylogo": False,
-    "doubleClick": "reset",      # double-tap resets zoom
+    "doubleClick": "reset",      # double-click resets the view
+}
+
+# Bar charts: no zoom/pan/scroll/modebar — hover tooltips only.
+_CONFIG_STATIC = {
+    "scrollZoom": False,
+    "displayModeBar": False,
+    "doubleClick": False,
+    "displaylogo": False,
+}
+
+# Gauges: fully static, no interaction at all.
+_CONFIG_GAUGE = {
+    "displayModeBar": False,
+    "staticPlot": True,
 }
 
 
@@ -32,8 +48,26 @@ def _badge(*results) -> None:
         st.caption("🟢 live data")
 
 
-def _chart(fig, key: str) -> None:
-    st.plotly_chart(fig, use_container_width=True, key=key, config=_CHART_CONFIG)
+def _chart(fig, key: str, kind: str = "timeline") -> None:
+    """Render a Plotly figure.
+
+    kind="timeline" → pan/zoom enabled (no scroll-zoom); for time series + heatmap.
+    kind="static"   → axes locked (no zoom/pan/scroll), hover kept; for bar charts.
+    kind="gauge"    → fully static indicator.
+    """
+    if kind == "static":
+        fig.update_layout(dragmode=False)
+        try:
+            fig.update_xaxes(fixedrange=True)
+            fig.update_yaxes(fixedrange=True)
+        except Exception:
+            pass
+        cfg = _CONFIG_STATIC
+    elif kind == "gauge":
+        cfg = _CONFIG_GAUGE
+    else:
+        cfg = _CONFIG_TIMELINE
+    st.plotly_chart(fig, use_container_width=True, key=key, config=cfg)
 
 
 # ---------------------------------------------------------------------------
@@ -61,10 +95,11 @@ def render_overview() -> None:
     g1, g2 = st.columns(2)
     with g1:
         _chart(gauges.regime_gauge(regime.data["score"], regime.data["label"],
-                                   regime.data["color"]), key="overview_regime")
+                                   regime.data["color"]), key="overview_regime",
+               kind="gauge")
     with g2:
         _chart(gauges.fear_greed_gauge(fg.data["score"], fg.data["rating"]),
-               key="overview_feargreed")
+               key="overview_feargreed", kind="gauge")
 
     with st.expander("How the regime score is built"):
         comp = regime.data["components"]
@@ -121,7 +156,7 @@ def render_sentiment() -> None:
     c1, c2 = st.columns([1, 2])
     with c1:
         _chart(gauges.fear_greed_gauge(fg.data["score"], fg.data["rating"]),
-               key="sent_feargreed")
+               key="sent_feargreed", kind="gauge")
         st.metric("Breadth: Equal-wt − Cap-wt (YTD)",
                   fmt_num(concentration.data, 1, suffix="%"),
                   "negative = narrow / mega-cap led", delta_color="off")
@@ -149,7 +184,7 @@ def render_rates_macro() -> None:
     gdp = macro.gdp_growth()
     sp = markets.price_history("^GSPC", period="2y")
 
-    _chart(charts.yield_curve_chart(curve.data), key="rates_curve")
+    _chart(charts.yield_curve_chart(curve.data), key="rates_curve", kind="static")
 
     c1, c2 = st.columns(2)
     with c1:
@@ -281,7 +316,7 @@ def render_intelligence() -> None:
     from components.charts import _layout as _cl
     fig.update_layout(**_cl(height=400, margin=dict(l=40, r=40, t=20, b=30)))
     fig.update_xaxes(title="Price / Earnings")
-    _chart(fig, key="intel_sector_pe")
+    _chart(fig, key="intel_sector_pe", kind="static")
     st.caption("Green <25× · amber 25–40× · red >40× (richly valued)")
 
     # --- Analyst spotlight (watchlist) ---
@@ -309,7 +344,7 @@ def render_intelligence() -> None:
         from components.charts import _layout as _cl
         fig2.update_layout(barmode="stack", title="Analyst ratings distribution",
                            **_cl(height=320))
-        _chart(fig2, key="intel_ratings")
+        _chart(fig2, key="intel_ratings", kind="static")
     with a2:
         st.dataframe(table[["Symbol", "Rating", "Target Cons."]],
                      hide_index=True, width="stretch", height=320)

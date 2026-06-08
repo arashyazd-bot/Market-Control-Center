@@ -53,6 +53,9 @@ def fear_greed_gauge(score: float, rating: str) -> go.Figure:
 
 def regime_gauge(score: float, label: str, color: str) -> go.Figure:
     fc = _font_color()
+    dark = _dark()
+    red = "#F4564A" if dark else "#C8102E"
+    green = "#3FB950" if dark else "#1A7F37"
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=score,
@@ -72,11 +75,22 @@ def regime_gauge(score: float, label: str, color: str) -> go.Figure:
             "threshold": {"line": {"color": fc, "width": 3}, "value": score},
         },
     ))
+    # Spectrum extremes so the viewer knows what the score means: the −1 end is
+    # maximum Risk-Off, the +1 end maximum Risk-On, the middle band Neutral.
+    fam = "Figtree, system-ui, sans-serif"
+    fig.add_annotation(x=0.02, y=0.30, xref="paper", yref="paper",
+                       text="◀ RISK-OFF", showarrow=False,
+                       xanchor="left", yanchor="middle",
+                       font=dict(size=12, color=red, family=fam))
+    fig.add_annotation(x=0.98, y=0.30, xref="paper", yref="paper",
+                       text="RISK-ON ▶", showarrow=False,
+                       xanchor="right", yanchor="middle",
+                       font=dict(size=12, color=green, family=fam))
     fig.update_layout(
-        height=310,
-        margin=dict(l=20, r=20, t=75, b=10),
+        height=320,
+        margin=dict(l=30, r=30, t=75, b=15),
         template=_template(),
         paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(color=fc, family="Figtree, system-ui, sans-serif"),
+        font=dict(color=fc, family=fam),
     )
     return fig
