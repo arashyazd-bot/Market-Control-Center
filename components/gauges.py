@@ -54,11 +54,11 @@ def _add_extremes(fig: go.Figure, left_text: str, right_text: str, *,
     fig.add_annotation(x=xl, y=y, xref="paper", yref="paper",
                        text=left_text, showarrow=False,
                        xanchor="left", yanchor="middle",
-                       font=dict(size=8, color=cl, family=_GAUGE_FONT))
+                       font=dict(size=11, color=cl, family=_GAUGE_FONT))
     fig.add_annotation(x=xr, y=y, xref="paper", yref="paper",
                        text=right_text, showarrow=False,
                        xanchor="right", yanchor="middle",
-                       font=dict(size=8, color=cr, family=_GAUGE_FONT))
+                       font=dict(size=11, color=cr, family=_GAUGE_FONT))
 
 
 def fear_greed_gauge(score: float) -> go.Figure:
@@ -69,7 +69,7 @@ def fear_greed_gauge(score: float) -> go.Figure:
         number={"font": {"size": _GAUGE_NUMBER_SIZE, "color": fc}},
         gauge={
             "axis": {"range": [0, 100], "tickwidth": 1,
-                     "tickfont": {"size": 9, "color": fc}},
+                     "tickfont": {"size": 11, "color": fc}},
             "bar": {"color": "rgba(128,128,128,0.6)", "thickness": 0.25},
             "steps": [
                 {"range": [0, 25],   "color": "#DC2626"},
@@ -97,7 +97,7 @@ def regime_gauge(score: float, color: str) -> go.Figure:
         number={"valueformat": ".2f", "font": {"size": _GAUGE_NUMBER_SIZE, "color": color}},
         gauge={
             "axis": {"range": [-1, 1], "tickvals": [-1, -0.33, 0.33, 1],
-                     "tickfont": {"size": 9, "color": fc}},
+                     "tickfont": {"size": 11, "color": fc}},
             "bar": {"color": color, "thickness": 0.25},
             "steps": [
                 {"range": [-1, -0.33],  "color": "rgba(220,38,38,0.3)"},
