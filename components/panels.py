@@ -9,12 +9,38 @@ import config
 import plotly.graph_objects as go
 
 from components import charts, gauges
+from components.charts import c as chart_color
 from data import composite, fmp, fred, macro, markets, sentiment, valuation
-from utils.formatting import fmt_delta, fmt_num, percentile_label
+from utils.formatting import (fmt_delta, fmt_num, good_bad_color,
+                              percentile_label, valuation_verdict_good)
+
+
+# Timelines + the sector-strength heatmap: zoom/pan via drag + modebar, but
+# scrollZoom is OFF so a two-finger page scroll over a chart never zooms it.
+_CONFIG_TIMELINE = {
+    "scrollZoom": False,
+    "displayModeBar": True,
+    "modeBarButtonsToRemove": ["lasso2d", "select2d", "autoScale2d"],
+    "displaylogo": False,
+    "doubleClick": "reset",      # double-click resets the view
+}
+
+# Bar charts: no zoom/pan/scroll/modebar — hover tooltips only.
+_CONFIG_STATIC = {
+    "scrollZoom": False,
+    "displayModeBar": False,
+    "doubleClick": False,
+    "displaylogo": False,
+}
+
+# Gauges: fully static, no interaction at all.
+_CONFIG_GAUGE = {
+    "displayModeBar": False,
+    "staticPlot": True,
+}
 
 
 def _badge(*results) -> None:
-    """Render a small caption noting whether any source fell back to sample data."""
     sample_notes = [r.note for r in results if getattr(r, "is_sample", False)]
     if sample_notes:
         st.caption(f"🟡 sample data in use ({len(sample_notes)} source(s)) — "
@@ -23,8 +49,38 @@ def _badge(*results) -> None:
         st.caption("🟢 live data")
 
 
-def _chart(fig, key: str) -> None:
-    st.plotly_chart(fig, width="stretch", key=key)
+def _chart(fig, key: str, kind: str = "timeline") -> None:
+    """Render a Plotly figure.
+
+    kind="timeline" → pan/zoom enabled (no scroll-zoom); for time series + heatmap.
+    kind="static"   → axes locked (no zoom/pan/scroll), hover kept; for bar charts.
+    kind="gauge"    → fully static indicator.
+    """
+    if kind == "static":
+        fig.update_layout(dragmode=False)
+        try:
+            fig.update_xaxes(fixedrange=True)
+            fig.update_yaxes(fixedrange=True)
+        except Exception:
+            pass
+        cfg = _CONFIG_STATIC
+    elif kind == "gauge":
+        cfg = _CONFIG_GAUGE
+    else:
+        cfg = _CONFIG_TIMELINE
+    st.plotly_chart(fig, use_container_width=True, key=key, config=cfg)
+
+
+def _gauge_header(main: str, sub: str, sub_color: str | None = None) -> None:
+    """Centered title above a dial. Rendered in markdown (not inside the Plotly
+    indicator) so both dials' titles align and never overlap the arc."""
+    sc = sub_color or "var(--c-sub)"
+    st.markdown(
+        f"<div style='text-align:center;font-family:Figtree,system-ui,sans-serif;"
+        f"line-height:1.25;margin:0 0 -6px'>"
+        f"<div style='font-size:1.05rem;font-weight:700;color:var(--c-text)'>{main}</div>"
+        f"<div style='font-size:0.95rem;font-weight:600;color:{sc}'>{sub}</div>"
+        f"</div>", unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
@@ -51,11 +107,13 @@ def render_overview() -> None:
     st.divider()
     g1, g2 = st.columns(2)
     with g1:
-        _chart(gauges.regime_gauge(regime.data["score"], regime.data["label"],
-                                   regime.data["color"]), key="overview_regime")
+        _gauge_header("Market Regime", regime.data["label"], regime.data["color"])
+        _chart(gauges.regime_gauge(regime.data["score"], regime.data["color"]),
+               key="overview_regime", kind="gauge")
     with g2:
-        _chart(gauges.fear_greed_gauge(fg.data["score"], fg.data["rating"]),
-               key="overview_feargreed")
+        _gauge_header("Fear &amp; Greed", fg.data["rating"])
+        _chart(gauges.fear_greed_gauge(fg.data["score"]),
+               key="overview_feargreed", kind="gauge")
 
     with st.expander("How the regime score is built"):
         comp = regime.data["components"]
@@ -79,12 +137,18 @@ def render_valuation() -> None:
     v = val.data
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("Shiller CAPE", fmt_num(v["cape"], 1),
-              percentile_label(v.get("cape_pct", float("nan"))), delta_color="off")
-    c2.metric("Buffett Indicator", fmt_num(v["buffett"], 0, suffix="%"),
-              percentile_label(v.get("buffett_pct", float("nan"))), delta_color="off")
-    c3.metric("Equity Risk Premium", fmt_num(v["erp"], 2, suffix="%"),
-              "earnings yield − 10Y", delta_color="off")
+    cape_lbl = percentile_label(v.get("cape_pct", float("nan")))
+    c1.metric("Shiller CAPE", fmt_num(v["cape"], 1), cape_lbl,
+              delta_color=good_bad_color(valuation_verdict_good(cape_lbl)))
+    buf_lbl = percentile_label(v.get("buffett_pct", float("nan")))
+    c2.metric("Buffett Indicator", fmt_num(v["buffett"], 0, suffix="%"), buf_lbl,
+              delta_color=good_bad_color(valuation_verdict_good(buf_lbl)))
+    # ERP: a positive equity risk premium (stocks yield more than 10Y) is good;
+    # negative is a late-cycle warning (bad). NaN -> neutral.
+    erp = v.get("erp", float("nan"))
+    erp_good = None if erp != erp else (erp >= 0)   # NaN != NaN
+    c3.metric("Equity Risk Premium", fmt_num(erp, 2, suffix="%"),
+              "earnings yield − 10Y", delta_color=good_bad_color(erp_good))
 
     c4, c5, c6 = st.columns(3)
     c4.metric("Trailing P/E", fmt_num(v["pe_ttm"], 1))
@@ -111,17 +175,18 @@ def render_sentiment() -> None:
 
     c1, c2 = st.columns([1, 2])
     with c1:
-        _chart(gauges.fear_greed_gauge(fg.data["score"], fg.data["rating"]),
-               key="sent_feargreed")
+        _gauge_header("Fear &amp; Greed", fg.data["rating"])
+        _chart(gauges.fear_greed_gauge(fg.data["score"]),
+               key="sent_feargreed", kind="gauge")
         st.metric("Breadth: Equal-wt − Cap-wt (YTD)",
                   fmt_num(concentration.data, 1, suffix="%"),
                   "negative = narrow / mega-cap led", delta_color="off")
     with c2:
         _chart(charts.line_chart(fg.data["history"], "Fear & Greed (1Y)",
-                                 color="#e9c46a"), key="sent_fg_hist")
+                                 color=chart_color("yellow")), key="sent_fg_hist")
 
-    _chart(charts.line_chart(vix_hist.data["Close"], "VIX (1Y)", color="#e63946"),
-           key="sent_vix")
+    _chart(charts.line_chart(vix_hist.data["Close"], "VIX (1Y)",
+                             color=chart_color("danger")), key="sent_vix")
     _chart(charts.sector_heatmap(sectors.data), key="sent_sectors")
     _badge(fg, vix_hist, sectors, concentration)
 
@@ -138,9 +203,11 @@ def render_rates_macro() -> None:
     hy = macro.series("hy_oas")
     ig = macro.series("ig_oas")
     gdp = macro.gdp_growth()
-    sp = markets.price_history("^GSPC", period="2y")
+    # 10y of prices so the YoY series spans multiple years and reads as a real
+    # comparison against GDP (dual_axis_chart aligns them to their shared window).
+    sp = markets.price_history("^GSPC", period="10y")
 
-    _chart(charts.yield_curve_chart(curve.data), key="rates_curve")
+    _chart(charts.yield_curve_chart(curve.data), key="rates_curve", kind="static")
 
     c1, c2 = st.columns(2)
     with c1:
@@ -152,8 +219,8 @@ def render_rates_macro() -> None:
     cc1, cc2 = st.columns(2)
     with cc1:
         _chart(charts.line_chart(hy.data, "High-Yield Credit Spread (OAS)",
-                                 color="#e63946", y_suffix="%", recessions=True),
-               key="rates_hy")
+                                 color=chart_color("danger"), y_suffix="%",
+                                 recessions=True), key="rates_hy")
     with cc2:
         sp_yoy = (sp.data["Close"].pct_change(252) * 100).dropna()
         _chart(charts.dual_axis_chart(gdp.data, sp_yoy, "Real GDP growth %",
@@ -198,11 +265,11 @@ def _render_leading_indicators() -> None:
     lc1, lc2 = st.columns(2)
     with lc1:
         _chart(charts.line_chart(recprob.data, "Smoothed US Recession Probability",
-                                 color="#e63946", y_suffix="%", recessions=True),
-               key="lead_recprob")
+                                 color=chart_color("danger"), y_suffix="%",
+                                 recessions=True), key="lead_recprob")
     with lc2:
         _chart(charts.line_chart(sent.data, "Consumer Sentiment (UMich)",
-                                 color="#e9c46a"), key="lead_sentiment")
+                                 color=chart_color("yellow")), key="lead_sentiment")
 
     # Upcoming high-impact US releases.
     cal = fmp.get_economic_calendar()
@@ -240,10 +307,10 @@ def render_crossasset_politics() -> None:
     cg1, cg2 = st.columns(2)
     with cg1:
         _chart(charts.line_chart(ratio, "Copper / Gold ratio (growth barometer)",
-                                 color="#f4a261"), key="cross_coppergold")
+                                 color=chart_color("warning")), key="cross_coppergold")
     with cg2:
         _chart(charts.line_chart(epu.data, "Economic Policy Uncertainty Index",
-                                 color="#b5179e"), key="cross_epu")
+                                 color=chart_color("purple")), key="cross_epu")
 
     st.info(
         "**Policy & news (v1 placeholder):** live AAII survey, CME FedWatch rate-cut "
@@ -263,16 +330,16 @@ def render_intelligence() -> None:
     st.markdown("##### Sector Valuation (trailing P/E)")
     pe = fmp.get_sector_pe()
     df_pe = pe.data.sort_values("pe")
-    colors = ["#2a9d8f" if v < 25 else "#e9c46a" if v < 40 else "#e63946"
+    colors = [chart_color("success") if v < 25 else
+              chart_color("yellow") if v < 40 else chart_color("danger")
               for v in df_pe["pe"]]
     fig = go.Figure(go.Bar(
         x=df_pe["pe"], y=df_pe["sector"], orientation="h", marker_color=colors,
         text=[f"{v:.0f}×" for v in df_pe["pe"]], textposition="outside"))
-    fig.update_layout(template="plotly_dark", height=400,
-                      margin=dict(l=40, r=40, t=20, b=30),
-                      paper_bgcolor="rgba(0,0,0,0)")
+    from components.charts import _layout as _cl
+    fig.update_layout(**_cl(height=400, margin=dict(l=40, r=40, t=20, b=30)))
     fig.update_xaxes(title="Price / Earnings")
-    _chart(fig, key="intel_sector_pe")
+    _chart(fig, key="intel_sector_pe", kind="static")
     st.caption("Green <25× · amber 25–40× · red >40× (richly valued)")
 
     # --- Analyst spotlight (watchlist) ---
@@ -292,16 +359,15 @@ def render_intelligence() -> None:
         fig2 = go.Figure()
         syms = table["Symbol"]
         fig2.add_bar(y=syms, x=table["Buy"], name="Buy", orientation="h",
-                     marker_color="#2a9d8f")
+                     marker_color=chart_color("success"))
         fig2.add_bar(y=syms, x=table["Hold"], name="Hold", orientation="h",
-                     marker_color="#e9c46a")
+                     marker_color=chart_color("yellow"))
         fig2.add_bar(y=syms, x=table["Sell"], name="Sell", orientation="h",
-                     marker_color="#e63946")
-        fig2.update_layout(barmode="stack", template="plotly_dark", height=320,
-                           title="Analyst ratings distribution",
-                           margin=dict(l=40, r=20, t=50, b=30),
-                           paper_bgcolor="rgba(0,0,0,0)")
-        _chart(fig2, key="intel_ratings")
+                     marker_color=chart_color("danger"))
+        from components.charts import _layout as _cl
+        fig2.update_layout(barmode="stack", title="Analyst ratings distribution",
+                           **_cl(height=320))
+        _chart(fig2, key="intel_ratings", kind="static")
     with a2:
         st.dataframe(table[["Symbol", "Rating", "Target Cons."]],
                      hide_index=True, width="stretch", height=320)

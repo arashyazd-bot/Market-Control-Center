@@ -51,5 +51,28 @@ def percentile_label(pct: float) -> str:
     return "Very Cheap"
 
 
+def good_bad_color(is_good) -> str:
+    """st.metric ``delta_color`` for a non-numeric verdict pill.
+
+    Verdict strings carry no leading '-', so Streamlit always treats them as an
+    "up" delta — which means ``delta_color='normal'`` renders green and
+    ``'inverse'`` renders red. Returns green for good, red for bad, grey for
+    neutral/unknown."""
+    if is_good is None:
+        return "off"
+    return "normal" if is_good else "inverse"
+
+
+def valuation_verdict_good(label: str):
+    """True if a percentile_label reads cheap (good), False if expensive (bad),
+    None for fair / unknown."""
+    low = (label or "").lower()
+    if "cheap" in low:
+        return True
+    if "expensive" in low:
+        return False
+    return None
+
+
 def clamp(value: float, lo: float = -1.0, hi: float = 1.0) -> float:
     return max(lo, min(hi, value))
