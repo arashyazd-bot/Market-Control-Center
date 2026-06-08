@@ -123,6 +123,15 @@ REGIME_BANDS = [
     (0.33, 1.01, "Risk-On", "#2a9d8f"),
 ]
 
+# NBER-dated US recessions (peak -> trough). Used to shade macro time-series
+# charts. Source: NBER Business Cycle Dating Committee.
+NBER_RECESSIONS = [
+    ("1990-07-01", "1991-03-31"),
+    ("2001-03-01", "2001-11-30"),
+    ("2007-12-01", "2009-06-30"),
+    ("2020-02-01", "2020-04-30"),
+]
+
 # Reference levels used for point-in-time normalization
 VIX_CALM = 13.0
 VIX_PANIC = 35.0

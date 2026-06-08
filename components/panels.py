@@ -149,7 +149,8 @@ def render_rates_macro() -> None:
     cc1, cc2 = st.columns(2)
     with cc1:
         _chart(charts.line_chart(hy.data, "High-Yield Credit Spread (OAS)",
-                                 color="#e63946", y_suffix="%"), key="rates_hy")
+                                 color="#e63946", y_suffix="%", recessions=True),
+               key="rates_hy")
     with cc2:
         sp_yoy = (sp.data["Close"].pct_change(252) * 100).dropna()
         _chart(charts.dual_axis_chart(gdp.data, sp_yoy, "Real GDP growth %",

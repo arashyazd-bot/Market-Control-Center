@@ -64,7 +64,8 @@ _FRED_PRESETS = {
 }
 
 
-def fred_series(key: str, days: int = 260) -> pd.Series:
+def fred_series(key: str, days: int = 1820) -> pd.Series:
+    # ~7 years of business days so NBER recession shading (e.g. 2020) is in-window.
     level, vol = _FRED_PRESETS.get(key, (100.0, 1.0))
     rng = _seed("fred_" + key)
     noise = rng.normal(0, vol, days).cumsum() * 0.15

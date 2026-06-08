@@ -17,6 +17,7 @@ from PIL import Image, ImageDraw, ImageFont
 import config
 from components import charts, gauges
 from data import composite, fred, markets, sentiment, valuation
+from data import sample as _sample
 from utils.formatting import fmt_num, fmt_delta
 
 BG = (14, 17, 23)
@@ -124,8 +125,10 @@ def main():
     # ---- Rates & Macro ----
     curve = fred.get_yield_curve()
     s2 = fred.get_series("spread_10y2y"); hy = fred.get_series("hy_oas")
-    gdp = fred.get_series("gdp_growth"); sp2 = markets.price_history("^GSPC", "2y")
-    sp_yoy = (sp2.data["Close"].pct_change(252) * 100).dropna()
+    # Long sample SP history so the dual-axis chart spans the same ~7y window
+    # as the GDP series and the 2020 recession band is visible (preview only).
+    gdp = fred.get_series("gdp_growth")
+    sp_yoy = (_sample.price_history("^GSPC", days=1820)["Close"].pct_change(252) * 100).dropna()
     rm = stack("Rates & Macro Cycle", "Yield curve, spreads, credit, growth", [], [
         (charts.yield_curve_chart(curve.data), 320),
         (charts.spread_chart(s2.data, "10Y-2Y Spread (recession signal)"), 300),
