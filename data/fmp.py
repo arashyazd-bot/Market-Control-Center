@@ -139,6 +139,81 @@ def get_sector_performance() -> DataResult:
         return DataResult(sample.sector_performance(), is_sample=True, note=str(exc)[:80])
 
 
+@st.cache_data(ttl=config.TTL_MARKETS, show_spinner=False)
+def get_sector_pe() -> DataResult:
+    """Latest trailing P/E by sector (FMP snapshot)."""
+    if not available():
+        return DataResult(sample.sector_pe(), is_sample=True, note="no FMP key")
+    try:
+        for back in range(0, 6):
+            day = (pd.Timestamp.today() - pd.Timedelta(days=back)).strftime("%Y-%m-%d")
+            try:
+                rows = _get("sector-pe-snapshot", date=day)
+            except Exception:
+                continue
+            df = pd.DataFrame(rows)[["sector", "pe"]]
+            return DataResult(df, is_sample=False, meta={"date": day})
+        raise ValueError("no recent snapshot")
+    except Exception as exc:
+        return DataResult(sample.sector_pe(), is_sample=True, note=str(exc)[:80])
+
+
+@st.cache_data(ttl=config.TTL_MARKETS, show_spinner=False)
+def get_movers(direction: str = "gainers", top: int = 10) -> DataResult:
+    """Biggest gainers/losers, with leveraged/inverse ETFs filtered out."""
+    if not available():
+        return DataResult(sample.market_movers(direction), is_sample=True, note="no FMP key")
+    try:
+        rows = _get(f"biggest-{direction}")
+        df = pd.DataFrame(rows)
+        mask = ~df["name"].str.contains("|".join(config.MOVER_EXCLUDE), case=False, na=False)
+        df = df[mask & (df["price"] >= 1.0)]
+        df = df[["symbol", "name", "price", "changesPercentage"]].head(top)
+        return DataResult(df.reset_index(drop=True), is_sample=False)
+    except Exception as exc:
+        return DataResult(sample.market_movers(direction), is_sample=True, note=str(exc)[:80])
+
+
+@st.cache_data(ttl=config.TTL_MACRO, show_spinner=False)
+def get_analyst_consensus(symbol: str) -> DataResult:
+    """Combined price-target consensus + analyst grade distribution for a symbol."""
+    if not available():
+        return DataResult(sample.analyst_consensus(symbol), is_sample=True, note="no FMP key")
+    try:
+        pt = _get("price-target-consensus", symbol=symbol)[0]
+        gr = _get("grades-consensus", symbol=symbol)[0]
+        out = {
+            "symbol": symbol,
+            "consensus": gr.get("consensus", "—"),
+            "buy": gr.get("strongBuy", 0) + gr.get("buy", 0),
+            "hold": gr.get("hold", 0),
+            "sell": gr.get("sell", 0) + gr.get("strongSell", 0),
+            "target_low": pt.get("targetLow"),
+            "target_consensus": pt.get("targetConsensus"),
+            "target_high": pt.get("targetHigh"),
+        }
+        return DataResult(out, is_sample=False)
+    except Exception as exc:
+        return DataResult(sample.analyst_consensus(symbol), is_sample=True, note=str(exc)[:80])
+
+
+@st.cache_data(ttl=config.TTL_SENTIMENT, show_spinner=False)
+def get_congressional_trades(top: int = 15) -> DataResult:
+    """Latest US Senate trading disclosures (requires an FMP Starter+ tier)."""
+    if not available():
+        return DataResult(sample.congressional_trades(), is_sample=True, note="no FMP key")
+    try:
+        rows = _get("senate-latest")
+        df = pd.DataFrame(rows)
+        rename = {"dateRecieved": "date", "transactionDate": "date", "office": "senator",
+                  "firstName": "first", "lastName": "last"}
+        df = df.rename(columns={k: v for k, v in rename.items() if k in df})
+        cols = [c for c in ["date", "symbol", "senator", "type", "amount"] if c in df]
+        return DataResult(df[cols].head(top) if cols else df.head(top), is_sample=False)
+    except Exception as exc:
+        return DataResult(sample.congressional_trades(), is_sample=True, note=str(exc)[:80])
+
+
 @st.cache_data(ttl=config.TTL_SENTIMENT, show_spinner=False)
 def get_economic_calendar(days: int = 10) -> DataResult:
     """Upcoming high-impact US economic releases (next ``days`` days)."""

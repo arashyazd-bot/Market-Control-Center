@@ -171,6 +171,53 @@ def economic_calendar() -> pd.DataFrame:
     return pd.DataFrame(rows, columns=["date", "event", "impact", "estimate", "previous"])
 
 
+def sector_pe() -> pd.DataFrame:
+    rng = _seed("sector_pe")
+    sectors = ["Technology", "Consumer Cyclical", "Communication Services",
+               "Healthcare", "Financial Services", "Industrials", "Energy",
+               "Consumer Defensive", "Utilities", "Real Estate", "Basic Materials"]
+    return pd.DataFrame({"sector": sectors,
+                         "pe": [round(float(rng.uniform(18, 60)), 1) for _ in sectors]})
+
+
+def market_movers(direction: str = "gainers") -> pd.DataFrame:
+    rng = _seed("movers_" + direction)
+    sign = 1 if direction == "gainers" else -1
+    names = [("ACME", "Acme Corp"), ("BLDR", "Builder Inc"), ("CRWN", "Crown Co"),
+             ("DYNE", "Dyne Labs"), ("EVRG", "Evergreen Ltd"), ("FLUX", "Flux Systems"),
+             ("GRID", "Grid Power"), ("HELX", "Helix Bio"), ("IONA", "Iona Tech"),
+             ("JOLT", "Jolt Energy")]
+    rows = [{"symbol": s, "name": n, "price": round(float(rng.uniform(5, 200)), 2),
+             "changesPercentage": round(sign * float(rng.uniform(6, 25)), 2)} for s, n in names]
+    return pd.DataFrame(rows)
+
+
+def analyst_consensus(symbol: str) -> dict:
+    rng = _seed("analyst_" + symbol)
+    buy, hold, sell = int(rng.integers(30, 80)), int(rng.integers(5, 35)), int(rng.integers(0, 15))
+    c = round(float(rng.uniform(50, 900)), 2)
+    return {"symbol": symbol, "consensus": "Buy" if buy > hold + sell else "Hold",
+            "buy": buy, "hold": hold, "sell": sell,
+            "target_low": round(c * 0.7, 2), "target_consensus": c,
+            "target_high": round(c * 1.4, 2)}
+
+
+def congressional_trades() -> pd.DataFrame:
+    rng = _seed("congress")
+    syms = ["NVDA", "AAPL", "MSFT", "AMZN", "META", "GOOGL", "JPM", "XOM"]
+    types = ["Purchase", "Sale"]
+    amts = ["$1,001-$15,000", "$15,001-$50,000", "$50,001-$100,000", "$100,001-$250,000"]
+    rows = []
+    for i in range(8):
+        d = pd.Timestamp("2026-06-08") - pd.Timedelta(days=int(rng.integers(1, 40)))
+        rows.append({"date": d.strftime("%Y-%m-%d"),
+                     "symbol": syms[int(rng.integers(0, len(syms)))],
+                     "senator": f"Senator {chr(65 + i)}",
+                     "type": types[int(rng.integers(0, 2))],
+                     "amount": amts[int(rng.integers(0, len(amts)))]})
+    return pd.DataFrame(rows)
+
+
 def valuation() -> dict:
     return {
         "cape": 34.5,

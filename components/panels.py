@@ -6,6 +6,8 @@ import pandas as pd
 import streamlit as st
 
 import config
+import plotly.graph_objects as go
+
 from components import charts, gauges
 from data import composite, fmp, fred, macro, markets, sentiment, valuation
 from utils.formatting import fmt_delta, fmt_num, percentile_label
@@ -248,3 +250,83 @@ def render_crossasset_politics() -> None:
         "odds, and a news-sentiment feed are scoped for a later pass. The Economic "
         "Policy Uncertainty index above is the live proxy for political/policy risk.")
     _badge(epu, copper, gold, *hist_results)
+
+
+# ---------------------------------------------------------------------------
+# 6. Market Intelligence (stock/sector level)
+# ---------------------------------------------------------------------------
+def render_intelligence() -> None:
+    st.subheader("Market Intelligence — Stock & Sector")
+    st.caption(f"Active source: **{macro.active_source()}** · stock-level data needs an FMP key")
+
+    # --- Sector valuation (P/E) ---
+    st.markdown("##### Sector Valuation (trailing P/E)")
+    pe = fmp.get_sector_pe()
+    df_pe = pe.data.sort_values("pe")
+    colors = ["#2a9d8f" if v < 25 else "#e9c46a" if v < 40 else "#e63946"
+              for v in df_pe["pe"]]
+    fig = go.Figure(go.Bar(
+        x=df_pe["pe"], y=df_pe["sector"], orientation="h", marker_color=colors,
+        text=[f"{v:.0f}×" for v in df_pe["pe"]], textposition="outside"))
+    fig.update_layout(template="plotly_dark", height=400,
+                      margin=dict(l=40, r=40, t=20, b=30),
+                      paper_bgcolor="rgba(0,0,0,0)")
+    fig.update_xaxes(title="Price / Earnings")
+    _chart(fig, key="intel_sector_pe")
+    st.caption("Green <25× · amber 25–40× · red >40× (richly valued)")
+
+    # --- Analyst spotlight (watchlist) ---
+    st.divider()
+    st.markdown("##### Analyst Spotlight — Mega-Cap Watchlist")
+    consensus = [fmp.get_analyst_consensus(s) for s in config.ANALYST_WATCHLIST]
+    rows = [c.data for c in consensus]
+    table = pd.DataFrame([{
+        "Symbol": r["symbol"], "Rating": r["consensus"],
+        "Buy": r["buy"], "Hold": r["hold"], "Sell": r["sell"],
+        "Target Low": r["target_low"], "Target Cons.": r["target_consensus"],
+        "Target High": r["target_high"],
+    } for r in rows])
+
+    a1, a2 = st.columns([3, 2])
+    with a1:
+        fig2 = go.Figure()
+        syms = table["Symbol"]
+        fig2.add_bar(y=syms, x=table["Buy"], name="Buy", orientation="h",
+                     marker_color="#2a9d8f")
+        fig2.add_bar(y=syms, x=table["Hold"], name="Hold", orientation="h",
+                     marker_color="#e9c46a")
+        fig2.add_bar(y=syms, x=table["Sell"], name="Sell", orientation="h",
+                     marker_color="#e63946")
+        fig2.update_layout(barmode="stack", template="plotly_dark", height=320,
+                           title="Analyst ratings distribution",
+                           margin=dict(l=40, r=20, t=50, b=30),
+                           paper_bgcolor="rgba(0,0,0,0)")
+        _chart(fig2, key="intel_ratings")
+    with a2:
+        st.dataframe(table[["Symbol", "Rating", "Target Cons."]],
+                     hide_index=True, width="stretch", height=320)
+    with st.expander("Full analyst price targets"):
+        st.dataframe(table, hide_index=True, width="stretch")
+
+    # --- Market movers ---
+    st.divider()
+    st.markdown("##### Today's Market Movers")
+    gainers = fmp.get_movers("gainers")
+    losers = fmp.get_movers("losers")
+    g, l = st.columns(2)
+    with g:
+        st.markdown("**🟢 Top gainers**")
+        st.dataframe(gainers.data, hide_index=True, width="stretch")
+    with l:
+        st.markdown("**🔴 Top losers**")
+        st.dataframe(losers.data, hide_index=True, width="stretch")
+
+    # --- Congressional trades ---
+    st.divider()
+    st.markdown("##### Congressional Trading (Senate disclosures)")
+    congress = fmp.get_congressional_trades()
+    st.dataframe(congress.data, hide_index=True, width="stretch")
+    if congress.is_sample:
+        st.caption("🟡 sample — live Senate/House disclosures need an FMP Starter+ plan")
+
+    _badge(pe, gainers, losers, congress, *consensus)

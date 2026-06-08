@@ -61,9 +61,10 @@ def main() -> None:
         "Built for top-down allocation: gauge the regime, valuation, sentiment, "
         "rates, the business cycle, and cross-asset/policy risk on one screen.")
 
-    tab_overview, tab_val, tab_sent, tab_rates, tab_cross = st.tabs([
+    (tab_overview, tab_val, tab_sent, tab_rates, tab_cross,
+     tab_intel) = st.tabs([
         "🧭 Overview", "💰 Valuation", "😱 Sentiment & Internals",
-        "📈 Rates & Macro", "🌍 Cross-Asset & Politics",
+        "📈 Rates & Macro", "🌍 Cross-Asset & Politics", "💹 Market Intelligence",
     ])
 
     with tab_overview:
@@ -76,6 +77,8 @@ def main() -> None:
         panels.render_rates_macro()
     with tab_cross:
         panels.render_crossasset_politics()
+    with tab_intel:
+        panels.render_intelligence()
 
 
 if __name__ == "__main__":

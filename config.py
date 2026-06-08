@@ -77,6 +77,13 @@ FMP_INDICATORS = {
 }
 FMP_REAL_GDP = "realGDP"  # level -> we derive SAAR growth from it
 
+# Mega-cap watchlist for the analyst spotlight (Market Intelligence tab).
+ANALYST_WATCHLIST = ["NVDA", "AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA"]
+
+# Substrings that mark leveraged/inverse ETFs we filter out of "market movers".
+MOVER_EXCLUDE = ["ETF", "Daily", "2X", "3X", "Bull", "Bear", "Leverage",
+                 "UltraShort", "Ultra", " Long ", " Short "]
+
 # ---------------------------------------------------------------------------
 # yfinance tickers
 # ---------------------------------------------------------------------------

@@ -17,6 +17,24 @@ import pandas as pd
 import plotly.graph_objects as go
 from PIL import Image
 
+# Real stock/sector intelligence captured from FMP MCP, 2026-06-08
+SECTOR_PE = {
+    "Financial Services": 21.3, "Utilities": 26.1, "Healthcare": 26.4,
+    "Communication Services": 27.1, "Basic Materials": 29.9,
+    "Consumer Defensive": 37.8, "Industrials": 45.6, "Energy": 49.6,
+    "Technology": 54.9, "Real Estate": 57.4, "Consumer Cyclical": 81.0,
+}
+ANALYST = [
+    # symbol, buy, hold, sell, target_low, target_cons, target_high, rating
+    ("NVDA", 60, 16, 3, 139, 309.46, 500, "Buy"),
+    ("AAPL", 70, 33, 7, 253, 323.82, 400, "Buy"),
+    ("MSFT", 66, 16, 0, 415, 551.96, 680, "Buy"),
+    ("GOOGL", 71, 11, 1, 360, 411.80, 460, "Buy"),
+    ("AMZN", 83, 10, 1, 175, 307.29, 330, "Buy"),
+    ("META", 50, 7, 3, 700, 826.11, 910, "Buy"),
+    ("TSLA", 31, 35, 15, 360, 450.45, 548, "Hold"),
+]
+
 from components import charts
 from scripts.render_shots import header_strip, fig_to_img, BG, WIDTH
 
@@ -143,7 +161,42 @@ def main():
     imgs3 = [hdr3] + [fig_to_img(f, WIDTH, h) for f, h in figs3]
     stack(imgs3).save(f"{OUT}/real_3_leading.png")
 
-    for p in ("real_1_rates_macro", "real_2_sectors_crypto", "real_3_leading"):
+    # ---- Panel D: Market Intelligence (LIVE) ----
+    n_buy = sum(1 for a in ANALYST if a[7] == "Buy")
+    kpis4 = [
+        ("Watchlist", f"{n_buy} Buy / {len(ANALYST) - n_buy} Hold", "mega-caps"),
+        ("Cheapest", "Financials 21×", ""),
+        ("Priciest", "Cons. Cyc. 81×", ""),
+        ("Top target", "META $826", "consensus"),
+    ]
+    hdr4 = header_strip("Market Intelligence — LIVE",
+                        "Real data via FMP MCP  -  2026-06-08", kpis4)
+
+    pe = pd.Series(SECTOR_PE).sort_values()
+    colors = ["#2a9d8f" if v < 25 else "#e9c46a" if v < 40 else "#e63946" for v in pe.values]
+    fig_pe = go.Figure(go.Bar(x=pe.values, y=pe.index, orientation="h", marker_color=colors,
+                              text=[f"{v:.0f}×" for v in pe.values], textposition="outside"))
+    fig_pe.update_layout(title="Sector Valuation — trailing P/E (real)",
+                         template="plotly_dark", height=400,
+                         margin=dict(l=40, r=50, t=50, b=30), paper_bgcolor="#0e1117")
+
+    syms = [a[0] for a in ANALYST]
+    fig_an = go.Figure()
+    fig_an.add_bar(y=syms, x=[a[1] for a in ANALYST], name="Buy", orientation="h",
+                   marker_color="#2a9d8f")
+    fig_an.add_bar(y=syms, x=[a[2] for a in ANALYST], name="Hold", orientation="h",
+                   marker_color="#e9c46a")
+    fig_an.add_bar(y=syms, x=[a[3] for a in ANALYST], name="Sell", orientation="h",
+                   marker_color="#e63946")
+    fig_an.update_layout(barmode="stack", title="Analyst ratings — mega-cap watchlist (real)",
+                         template="plotly_dark", height=360,
+                         margin=dict(l=50, r=20, t=50, b=30), paper_bgcolor="#0e1117")
+
+    imgs4 = [hdr4, fig_to_img(fig_pe, WIDTH, 400), fig_to_img(fig_an, WIDTH, 360)]
+    stack(imgs4).save(f"{OUT}/real_4_intelligence.png")
+
+    for p in ("real_1_rates_macro", "real_2_sectors_crypto", "real_3_leading",
+              "real_4_intelligence"):
         print(f"{OUT}/{p}.png")
 
 

@@ -13,6 +13,7 @@ asset-allocation timing (stocks, sectors, real estate).
 | **😱 Sentiment & Internals** | Fear vs greed; is the rally healthy? | Fear & Greed, VIX, sector heatmap, breadth/concentration |
 | **📈 Rates & Macro** | Where are we in the cycle? | Yield curve, 10Y–2Y / 10Y–3M spreads, credit spreads, GDP vs S&P, Sahm, CPI |
 | **🌍 Cross-Asset & Politics** | Risk appetite & policy risk | DXY, gold, oil, copper/gold, BTC, Policy Uncertainty index |
+| **💹 Market Intelligence** | Stock/sector picking edge | Sector P/E valuation, analyst ratings & price targets (watchlist), market movers, congressional trades |
 
 The **Composite Regime** score blends a weighted basket of normalized signals
 (yield-curve slope, credit spreads, VIX, Fear & Greed, trend vs 200DMA, valuation,
