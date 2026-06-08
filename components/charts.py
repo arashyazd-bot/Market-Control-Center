@@ -70,14 +70,14 @@ def _layout(**extra) -> dict:
         template=_template(),
         paper_bgcolor=_paper_bg(),
         plot_bgcolor=_paper_bg(),
-        margin=dict(l=40, r=20, t=50, b=30),
-        height=320,
+        margin=dict(l=28, r=14, t=35, b=21),
+        height=224,
         hovermode="x unified",
-        dragmode="pan",          # click-drag pans; scroll/pinch zooms
-        font=dict(size=13, color=fc, family="Figtree, system-ui, sans-serif"),
-        xaxis=dict(gridcolor=gc, zerolinecolor=gc, tickfont=dict(size=13)),
-        yaxis=dict(gridcolor=gc, zerolinecolor=gc, tickfont=dict(size=13)),
-        legend=dict(font=dict(size=13)),
+        dragmode="pan",          # click-drag pans; modebar/box zooms
+        font=dict(size=9, color=fc, family="Figtree, system-ui, sans-serif"),
+        xaxis=dict(gridcolor=gc, zerolinecolor=gc, tickfont=dict(size=9)),
+        yaxis=dict(gridcolor=gc, zerolinecolor=gc, tickfont=dict(size=9)),
+        legend=dict(font=dict(size=9)),
     )
     base.update(extra)
     return base
@@ -98,7 +98,7 @@ def add_recession_shading(fig: go.Figure, x_start, x_end, label: bool = True) ->
             x0=lo, x1=hi, fillcolor=shc, line_width=0, layer="below",
             annotation_text="Recession" if (label and not labeled) else None,
             annotation_position="top left",
-            annotation=dict(font=dict(size=12, color="#9aa0a6")),
+            annotation=dict(font=dict(size=8, color="#9aa0a6")),
         )
         labeled = True
     return fig
@@ -118,7 +118,7 @@ def line_chart(series: pd.Series, title: str, color: str | None = None,
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=series.index, y=series.values, mode="lines", name=title,
-        line=dict(color=col, width=2.5), fill="tozeroy" if fill else None,
+        line=dict(color=col, width=1.8), fill="tozeroy" if fill else None,
     ))
     fig.update_layout(title=title, **_layout())
     fig.update_yaxes(ticksuffix=y_suffix)
@@ -134,7 +134,7 @@ def spread_chart(series: pd.Series, title: str, y_suffix: str = "%",
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=series.index, y=series.values, mode="lines",
-        line=dict(color=c("primary"), width=2.5), name=title,
+        line=dict(color=c("primary"), width=1.8), name=title,
     ))
     fig.add_hline(y=0, line_dash="dash", line_color=c("danger"), opacity=0.7)
     fig.update_layout(title=title, **_layout())
@@ -151,8 +151,8 @@ def yield_curve_chart(curve: pd.Series) -> go.Figure:
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=s.index, y=s.values, mode="lines+markers",
-        line=dict(color=c("primary"), width=3),
-        marker=dict(size=9),
+        line=dict(color=c("primary"), width=2),
+        marker=dict(size=6),
     ))
     fig.update_layout(title="US Treasury Yield Curve", **_layout())
     fig.update_xaxes(title="Maturity (years)", type="log",
@@ -180,10 +180,10 @@ def dual_axis_chart(left: pd.Series, right: pd.Series, left_name: str,
 
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     fig.add_trace(go.Scatter(x=left.index, y=left.values, name=left_name,
-                             line=dict(color=c("warning"), width=2.5)),
+                             line=dict(color=c("warning"), width=1.8)),
                   secondary_y=False)
     fig.add_trace(go.Scatter(x=right.index, y=right.values, name=right_name,
-                             line=dict(color=c("primary"), width=2.5)),
+                             line=dict(color=c("primary"), width=1.8)),
                   secondary_y=True)
     fig.update_layout(title=title, **_layout())
     fig.update_yaxes(title=left_name, secondary_y=False)
@@ -208,7 +208,7 @@ def sector_heatmap(df: pd.DataFrame) -> go.Figure:
         texttemplate="%{text}", colorbar=dict(title="%"),
     ))
     fig.update_layout(title="Sector Relative Strength",
-                      **_layout(height=430))
+                      **_layout(height=300))
     return fig
 
 
@@ -222,7 +222,7 @@ def normalized_multi(series_map: dict, title: str) -> go.Figure:
             continue
         rebased = s / s.iloc[0] * 100
         fig.add_trace(go.Scatter(x=rebased.index, y=rebased.values, name=name,
-                                 line=dict(color=palette[i % len(palette)], width=2.5)))
+                                 line=dict(color=palette[i % len(palette)], width=1.8)))
     fig.add_hline(y=100, line_dash="dot",
                   line_color="#888888" if dark else "#94A3B8", opacity=0.6)
     fig.update_layout(title=title, **_layout())

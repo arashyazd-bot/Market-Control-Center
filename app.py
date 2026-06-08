@@ -33,7 +33,8 @@ _CSS_BASE = """
     --sans: 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
-html { font-size: 16px; }
+/* Global 30% downscale: rem-based sizing shrinks with the root font-size. */
+html { font-size: 11px; }
 html, body, [class*="css"] {
     font-family: var(--sans) !important;
     line-height: 1.5;
@@ -91,10 +92,10 @@ h3 { font-size: 1.15rem !important; }
     font-size: 0.86rem !important;
     font-weight: 600 !important;
     letter-spacing: 0.01em !important;
-    padding: 9px 16px !important;
+    padding: 6px 11px !important;
     margin-bottom: -1px !important;
     border-radius: 0 !important;
-    min-height: 42px !important;
+    min-height: 30px !important;
     color: var(--c-sub) !important;
 }
 .stTabs [aria-selected="true"] {
@@ -108,7 +109,7 @@ h3 { font-size: 1.15rem !important; }
     font-size: 0.84rem !important;
     font-weight: 600 !important;
     border-radius: 5px !important;
-    min-height: 42px !important;
+    min-height: 30px !important;
     border: 1px solid var(--c-btn-border) !important;
     background: var(--c-btn-bg) !important;
     color: var(--c-text) !important;
@@ -170,8 +171,8 @@ header[data-testid="stHeader"] {
     text-align: right; font-size: 0.7rem; color: var(--c-muted); line-height: 1.7;
 }
 .mcc-live-dot {
-    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
-    background: var(--c-up); margin-right: 5px; vertical-align: middle;
+    display: inline-block; width: 4px; height: 4px; border-radius: 50%;
+    background: var(--c-up); margin-right: 4px; vertical-align: middle;
     animation: mcc-pulse 2.5s ease-in-out infinite;
 }
 @keyframes mcc-pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
@@ -335,6 +336,7 @@ def main() -> None:
 
     _inject_css(dark)
     sidebar(dark)
+    panels.warm_caches()   # parallel prefetch so panels hit warm caches
     ticker_strip()
 
     st.markdown(f"""

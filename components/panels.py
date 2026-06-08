@@ -2,6 +2,9 @@
 layer, surfaces a live/sample badge, and draws charts via components.charts."""
 from __future__ import annotations
 
+import threading
+from concurrent.futures import ThreadPoolExecutor
+
 import pandas as pd
 import streamlit as st
 
@@ -13,6 +16,61 @@ from components.charts import c as chart_color
 from data import composite, fmp, fred, macro, markets, sentiment, valuation
 from utils.formatting import (fmt_delta, fmt_num, good_bad_color,
                               percentile_label, valuation_verdict_good)
+
+try:  # attach the script context to worker threads so st.cache_data stays quiet
+    from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
+except Exception:  # pragma: no cover - shifts with Streamlit version
+    add_script_run_ctx = get_script_run_ctx = None
+
+
+def warm_caches() -> None:
+    """Fetch every independent data series concurrently to warm the
+    st.cache_data caches before any panel renders. Panels then hit warm caches
+    instead of fetching ~40 series sequentially (~8.5s -> a few seconds). Once
+    the caches are warm this is a fast no-op, so it is safe to call every run.
+    """
+    ctx = get_script_run_ctx() if get_script_run_ctx else None
+
+    quote_tickers = set(config.CROSS_ASSET.values()) | {
+        "^GSPC", "^IXIC", "^DJI", "^VIX", "^TNX", "GC=F", "CL=F", "BTC-USD"}
+    hist_1y = set(config.CROSS_ASSET.values()) | {"^VIX", "SPY", "RSP", "HG=F", "GC=F"}
+    macro_keys = ["hy_oas", "ig_oas", "unemployment", "sahm", "cpi", "fed_funds",
+                  "umich_sentiment", "initial_claims", "mortgage_30y", "recession_prob"]
+
+    thunks: list = []
+    thunks += [lambda t=t: markets.quote(t) for t in quote_tickers]
+    thunks += [lambda t=t: markets.price_history(t, "1y") for t in hist_1y]
+    thunks += [lambda k=k: macro.series(k) for k in macro_keys]
+    thunks += [lambda s=s: fmp.get_analyst_consensus(s) for s in config.ANALYST_WATCHLIST]
+    thunks += [
+        lambda: markets.price_history("^GSPC", "10y"),
+        markets.sector_performance,
+        composite.compute_regime,
+        sentiment.get_fear_greed,
+        valuation.get_valuation,
+        macro.yield_curve,
+        macro.gdp_growth,
+        lambda: macro.spread_series("s10y2y"),
+        lambda: macro.spread_series("s10y3m"),
+        lambda: fred.get_series("spread_10y2y"),
+        lambda: fred.get_series("policy_uncertainty"),
+        fmp.get_sector_pe,
+        lambda: fmp.get_movers("gainers"),
+        lambda: fmp.get_movers("losers"),
+        fmp.get_congressional_trades,
+        fmp.get_economic_calendar,
+    ]
+
+    def run(fn) -> None:
+        if ctx and add_script_run_ctx:
+            add_script_run_ctx(threading.current_thread(), ctx)
+        try:
+            fn()
+        except Exception:
+            pass  # panels re-fetch and surface their own sample/live badge
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        list(ex.map(run, thunks))
 
 
 # Timelines + the sector-strength heatmap: zoom/pan via drag + modebar, but
@@ -337,7 +395,7 @@ def render_intelligence() -> None:
         x=df_pe["pe"], y=df_pe["sector"], orientation="h", marker_color=colors,
         text=[f"{v:.0f}×" for v in df_pe["pe"]], textposition="outside"))
     from components.charts import _layout as _cl
-    fig.update_layout(**_cl(height=400, margin=dict(l=40, r=40, t=20, b=30)))
+    fig.update_layout(**_cl(height=280, margin=dict(l=28, r=28, t=14, b=21)))
     fig.update_xaxes(title="Price / Earnings")
     _chart(fig, key="intel_sector_pe", kind="static")
     st.caption("Green <25× · amber 25–40× · red >40× (richly valued)")
@@ -366,7 +424,7 @@ def render_intelligence() -> None:
                      marker_color=chart_color("danger"))
         from components.charts import _layout as _cl
         fig2.update_layout(barmode="stack", title="Analyst ratings distribution",
-                           **_cl(height=320))
+                           **_cl(height=224))
         _chart(fig2, key="intel_ratings", kind="static")
     with a2:
         st.dataframe(table[["Symbol", "Rating", "Target Cons."]],
