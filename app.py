@@ -5,14 +5,13 @@ Run with:  streamlit run app.py
 """
 from __future__ import annotations
 
-import os
 from datetime import datetime
 
 import streamlit as st
 from dotenv import load_dotenv
 
 from components import panels
-from data import markets
+from data import fmp, fred, markets
 
 load_dotenv()
 
@@ -305,10 +304,15 @@ def ticker_strip() -> None:
     for name, sym, dec in _TICKERS:
         try:
             q = markets.quote(sym)
-            price = float(q.data["price"])
-            chg = float(q.data["change_pct"])
         except Exception:
             continue
+        if getattr(q, "is_sample", False):   # honest: no fabricated quote
+            cells.append(
+                f'<span class="mcc-ti"><span class="mcc-tn">{name}</span>'
+                f'<span class="mcc-tv" style="color:var(--c-muted)">—</span></span>')
+            continue
+        price = float(q.data["price"])
+        chg = float(q.data["change_pct"])
         cls = "mcc-up" if chg >= 0 else "mcc-down"
         arrow = "▲" if chg >= 0 else "▼"
         cells.append(
@@ -318,6 +322,28 @@ def ticker_strip() -> None:
     if cells:
         st.markdown('<div class="mcc-ticker">' + "".join(cells) + "</div>",
                     unsafe_allow_html=True)
+
+
+def _source_status() -> tuple[str, str]:
+    """Report whether FMP/FRED are *actually* returning live data — not just
+    whether a key exists. Uses cached calls (shared with the panels), so it
+    adds at most one fetch per cache window."""
+    fmp_key = fmp.available()
+    fred_key = bool(fred._api_key())
+    fred_ok = fred_key and not fred.get_series("spread_10y2y").is_sample
+    fmp_ok = fmp_key and not fmp.get_yield_curve().is_sample
+    if fmp_ok and fred_ok:
+        return "ok", "🟢 Live — FMP + FRED connected."
+    if fmp_ok:
+        return "ok", "🟢 Live via FMP (FRED unavailable — some macro may be sample)."
+    if fred_ok and fmp_key:
+        return "warn", ("🟡 FMP unavailable (likely daily limit reached) — macro live "
+                        "via FRED; market/stock data may be sample.")
+    if fred_ok:
+        return "ok", "🟢 Macro live via FRED. No working FMP key — market/stock data is sample."
+    if fmp_key or fred_key:
+        return "warn", "🟡 Keys are set but live fetches are failing — showing sample data."
+    return "warn", "🟡 No API keys — running on sample data."
 
 
 def sidebar(dark: bool) -> None:
@@ -345,16 +371,8 @@ def sidebar(dark: bool) -> None:
 
         st.divider()
 
-        has_fmp = bool(os.environ.get("FMP_API_KEY"))
-        has_fred = bool(os.environ.get("FRED_API_KEY"))
-        if has_fmp:
-            st.success("FMP key detected — live rates/macro via FMP (FRED fallback).")
-        elif has_fred:
-            st.success("FRED API key detected — live macro data enabled.")
-        else:
-            st.warning(
-                "No FMP_API_KEY or FRED_API_KEY found. Running on **sample data**.\n\n"
-                "Add a free FRED key (fredaccount.stlouisfed.org) or FMP key to `.env`.")
+        level, msg = _source_status()
+        (st.success if level == "ok" else st.warning)(msg)
 
         st.divider()
         if st.button("↺  Refresh Data", width="stretch"):

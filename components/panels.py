@@ -104,22 +104,61 @@ _CONFIG_GAUGE = {
 }
 
 
+def _reason(results) -> tuple | None:
+    """(count, human reason) for why sources fell back, from their .note text —
+    or None if everything is live. Replaces the old canned 'add a FRED_API_KEY'."""
+    notes = [(getattr(r, "note", "") or "") for r in results
+             if getattr(r, "is_sample", False)]
+    if not notes:
+        return None
+    blob = " ".join(notes).lower()
+    if any(k in blob for k in ("429", "limit reach", "too many")):
+        why = "FMP daily request limit reached — resets in ~24h"
+    elif "402" in blob or "premium" in blob or "starter" in blob:
+        why = "needs a paid FMP tier"
+    elif any(k in blob for k in ("invalid api key", "no fmp key", "no fred key", "missing")):
+        why = "missing/invalid API key"
+    elif any(k in blob for k in ("ssl", "timeout", "timed out", "connection", "urlopen", "max retries")):
+        why = "network/connection issue"
+    else:
+        why = "live source unavailable"
+    return len(notes), why
+
+
 def _badge(*results) -> None:
-    sample_notes = [r.note for r in results if getattr(r, "is_sample", False)]
-    if sample_notes:
-        st.caption(f"🟡 sample data in use ({len(sample_notes)} source(s)) — "
-                   "add a FRED_API_KEY and internet for live values")
+    """Honest live/sample badge: states how many feeds are on sample and WHY."""
+    info = _reason(results)
+    if info:
+        n, why = info
+        st.caption(f"🟡 {n} feed(s) showing sample data — {why}")
     else:
         st.caption("🟢 live data")
 
 
-def _chart(fig, key: str, kind: str = "timeline") -> None:
+def _mv(result, text: str) -> str:
+    """Honest metric value — '—' when the source is sample, so no fabricated
+    number is ever shown as if it were live."""
+    return "—" if getattr(result, "is_sample", False) else text
+
+
+def _md(result, text):
+    """Metric delta — hidden when the source is sample."""
+    return None if getattr(result, "is_sample", False) else text
+
+
+def _chart(fig, key: str, kind: str = "timeline", sample: bool = False) -> None:
     """Render a Plotly figure.
 
     kind="timeline" → pan/zoom enabled (no scroll-zoom); for time series + heatmap.
     kind="static"   → axes locked (no zoom/pan/scroll), hover kept; for bar charts.
     kind="gauge"    → fully static indicator.
+    sample=True      → overlay a 'SAMPLE DATA' watermark so a fabricated chart can
+                       never be mistaken for a live one.
     """
+    if sample:
+        fig.add_annotation(text="SAMPLE DATA · not live", xref="paper", yref="paper",
+                           x=0.5, y=0.5, showarrow=False, textangle=-18,
+                           font=dict(size=22, color="rgba(150,150,150,0.40)"))
     if kind == "static":
         fig.update_layout(dragmode=False)
         try:
@@ -159,25 +198,27 @@ def render_overview() -> None:
     fg = sentiment.get_fear_greed()
 
     k1, k2, k3, k4, k5 = st.columns(5)
-    k1.metric("S&P 500", fmt_num(sp.data["price"], 0),
-              fmt_delta(sp.data["change_pct"]))
-    k2.metric("VIX", fmt_num(vix.data["price"], 2),
-              fmt_delta(vix.data["change_pct"]), delta_color="inverse")
-    k3.metric("10Y–2Y Spread", fmt_num(fred.latest(spread), 2, suffix="%"))
-    k4.metric("Fear & Greed", fmt_num(fg.data["score"], 0), fg.data["rating"],
-              delta_color="off")
-    k5.metric("Regime", regime.data["label"])
+    k1.metric("S&P 500", _mv(sp, fmt_num(sp.data["price"], 0)),
+              _md(sp, fmt_delta(sp.data["change_pct"])))
+    k2.metric("VIX", _mv(vix, fmt_num(vix.data["price"], 2)),
+              _md(vix, fmt_delta(vix.data["change_pct"])), delta_color="inverse")
+    k3.metric("10Y–2Y Spread", _mv(spread, fmt_num(fred.latest(spread), 2, suffix="%")))
+    k4.metric("Fear & Greed", _mv(fg, fmt_num(fg.data["score"], 0)),
+              _md(fg, fg.data["rating"]), delta_color="off")
+    k5.metric("Regime", _mv(regime, regime.data["label"]))
 
     st.divider()
     g1, g2 = st.columns(2)
     with g1:
-        _gauge_header("Market Regime", regime.data["label"], regime.data["color"])
+        _gauge_header("Market Regime",
+                      "—" if regime.is_sample else regime.data["label"],
+                      regime.data["color"])
         _chart(gauges.regime_gauge(regime.data["score"], regime.data["color"]),
-               key="overview_regime", kind="gauge")
+               key="overview_regime", kind="gauge", sample=regime.is_sample)
     with g2:
-        _gauge_header("Fear &amp; Greed", fg.data["rating"])
+        _gauge_header("Fear &amp; Greed", "—" if fg.is_sample else fg.data["rating"])
         _chart(gauges.fear_greed_gauge(fg.data["score"]),
-               key="overview_feargreed", kind="gauge")
+               key="overview_feargreed", kind="gauge", sample=fg.is_sample)
 
     with st.expander("How the regime score is built"):
         comp = regime.data["components"]
@@ -202,22 +243,22 @@ def render_valuation() -> None:
 
     c1, c2, c3 = st.columns(3)
     cape_lbl = percentile_label(v.get("cape_pct", float("nan")))
-    c1.metric("Shiller CAPE", fmt_num(v["cape"], 1), cape_lbl,
+    c1.metric("Shiller CAPE", _mv(val, fmt_num(v["cape"], 1)), _md(val, cape_lbl),
               delta_color=good_bad_color(valuation_verdict_good(cape_lbl)))
     buf_lbl = percentile_label(v.get("buffett_pct", float("nan")))
-    c2.metric("Buffett Indicator", fmt_num(v["buffett"], 0, suffix="%"), buf_lbl,
-              delta_color=good_bad_color(valuation_verdict_good(buf_lbl)))
+    c2.metric("Buffett Indicator", _mv(val, fmt_num(v["buffett"], 0, suffix="%")),
+              _md(val, buf_lbl), delta_color=good_bad_color(valuation_verdict_good(buf_lbl)))
     # ERP: a positive equity risk premium (stocks yield more than 10Y) is good;
     # negative is a late-cycle warning (bad). NaN -> neutral.
     erp = v.get("erp", float("nan"))
     erp_good = None if erp != erp else (erp >= 0)   # NaN != NaN
-    c3.metric("Equity Risk Premium", fmt_num(erp, 2, suffix="%"),
-              "earnings yield − 10Y", delta_color=good_bad_color(erp_good))
+    c3.metric("Equity Risk Premium", _mv(val, fmt_num(erp, 2, suffix="%")),
+              _md(val, "earnings yield − 10Y"), delta_color=good_bad_color(erp_good))
 
     c4, c5, c6 = st.columns(3)
-    c4.metric("Trailing P/E", fmt_num(v["pe_ttm"], 1))
-    c5.metric("Forward P/E", fmt_num(v["forward_pe"], 1))
-    c6.metric("Dividend Yield", fmt_num(v["dividend_yield"], 2, suffix="%"))
+    c4.metric("Trailing P/E", _mv(val, fmt_num(v["pe_ttm"], 1)))
+    c5.metric("Forward P/E", _mv(val, fmt_num(v["forward_pe"], 1)))
+    c6.metric("Dividend Yield", _mv(val, fmt_num(v["dividend_yield"], 2, suffix="%")))
 
     st.info(
         "**Reading it:** CAPE > ~30 and Buffett Indicator > ~150% are historically "
@@ -239,19 +280,22 @@ def render_sentiment() -> None:
 
     c1, c2 = st.columns([1, 2])
     with c1:
-        _gauge_header("Fear &amp; Greed", fg.data["rating"])
+        _gauge_header("Fear &amp; Greed", "—" if fg.is_sample else fg.data["rating"])
         _chart(gauges.fear_greed_gauge(fg.data["score"]),
-               key="sent_feargreed", kind="gauge")
+               key="sent_feargreed", kind="gauge", sample=fg.is_sample)
         st.metric("Breadth: Equal-wt − Cap-wt (YTD)",
-                  fmt_num(concentration.data, 1, suffix="%"),
+                  _mv(concentration, fmt_num(concentration.data, 1, suffix="%")),
                   "negative = narrow / mega-cap led", delta_color="off")
     with c2:
         _chart(charts.line_chart(fg.data["history"], "Fear & Greed (1Y)",
-                                 color=chart_color("yellow")), key="sent_fg_hist")
+                                 color=chart_color("yellow")), key="sent_fg_hist",
+               sample=fg.is_sample)
 
     _chart(charts.line_chart(vix_hist.data["Close"], "VIX (1Y)",
-                             color=chart_color("danger")), key="sent_vix")
-    _chart(charts.sector_heatmap(sectors.data), key="sent_sectors")
+                             color=chart_color("danger")), key="sent_vix",
+           sample=vix_hist.is_sample)
+    _chart(charts.sector_heatmap(sectors.data), key="sent_sectors",
+           sample=sectors.is_sample)
     _badge(fg, vix_hist, sectors, concentration)
 
 
@@ -271,25 +315,27 @@ def render_rates_macro() -> None:
     # comparison against GDP (dual_axis_chart aligns them to their shared window).
     sp = markets.price_history("^GSPC", period="10y")
 
-    _chart(charts.yield_curve_chart(curve.data), key="rates_curve", kind="static")
+    _chart(charts.yield_curve_chart(curve.data), key="rates_curve", kind="static",
+           sample=curve.is_sample)
 
     c1, c2 = st.columns(2)
     with c1:
         _chart(charts.spread_chart(s_10y2y.data, "10Y–2Y Spread (recession signal)"),
-               key="rates_10y2y")
+               key="rates_10y2y", sample=s_10y2y.is_sample)
     with c2:
-        _chart(charts.spread_chart(s_10y3m.data, "10Y–3M Spread"), key="rates_10y3m")
+        _chart(charts.spread_chart(s_10y3m.data, "10Y–3M Spread"), key="rates_10y3m",
+               sample=s_10y3m.is_sample)
 
     cc1, cc2 = st.columns(2)
     with cc1:
         _chart(charts.line_chart(hy.data, "High-Yield Credit Spread (OAS)",
                                  color=chart_color("danger"), y_suffix="%",
-                                 recessions=True), key="rates_hy")
+                                 recessions=True), key="rates_hy", sample=hy.is_sample)
     with cc2:
         sp_yoy = (sp.data["Close"].pct_change(252) * 100).dropna()
         _chart(charts.dual_axis_chart(gdp.data, sp_yoy, "Real GDP growth %",
                                       "S&P 500 YoY %", "Growth: Economy vs Market"),
-               key="rates_gdp")
+               key="rates_gdp", sample=(gdp.is_sample or sp.is_sample))
 
     # Macro tiles.
     unemp = macro.series("unemployment")
@@ -297,11 +343,11 @@ def render_rates_macro() -> None:
     cpi = macro.series("cpi")
     ff = macro.series("fed_funds")
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Unemployment", fmt_num(macro.latest(unemp), 1, suffix="%"))
-    m2.metric("Sahm Rule", fmt_num(macro.latest(sahm), 2),
+    m1.metric("Unemployment", _mv(unemp, fmt_num(macro.latest(unemp), 1, suffix="%")))
+    m2.metric("Sahm Rule", _mv(sahm, fmt_num(macro.latest(sahm), 2)),
               "≥0.50 = recession trigger", delta_color="off")
-    m3.metric("CPI YoY", fmt_num(macro.yoy_change(cpi), 1, suffix="%"))
-    m4.metric("Fed Funds", fmt_num(macro.latest(ff), 2, suffix="%"))
+    m3.metric("CPI YoY", _mv(cpi, fmt_num(macro.yoy_change(cpi), 1, suffix="%")))
+    m4.metric("Fed Funds", _mv(ff, fmt_num(macro.latest(ff), 2, suffix="%")))
 
     _render_leading_indicators()
     _badge(curve, s_10y2y, s_10y3m, hy, ig, gdp, sp, unemp, sahm, cpi, ff)
@@ -317,23 +363,24 @@ def _render_leading_indicators() -> None:
     recprob = macro.series("recession_prob")
 
     t1, t2, t3, t4 = st.columns(4)
-    t1.metric("Consumer Sentiment", fmt_num(macro.latest(sent), 1),
+    t1.metric("Consumer Sentiment", _mv(sent, fmt_num(macro.latest(sent), 1)),
               "U. of Michigan", delta_color="off")
-    t2.metric("Initial Claims", fmt_num(macro.latest(claims), 0),
+    t2.metric("Initial Claims", _mv(claims, fmt_num(macro.latest(claims), 0)),
               "weekly", delta_color="off")
-    t3.metric("30Y Mortgage", fmt_num(macro.latest(mortgage), 2, suffix="%"),
+    t3.metric("30Y Mortgage", _mv(mortgage, fmt_num(macro.latest(mortgage), 2, suffix="%")),
               "real-estate cost", delta_color="off")
-    t4.metric("Recession Prob.", fmt_num(macro.latest(recprob), 2, suffix="%"),
+    t4.metric("Recession Prob.", _mv(recprob, fmt_num(macro.latest(recprob), 2, suffix="%")),
               "smoothed (FRED/FMP)", delta_color="off")
 
     lc1, lc2 = st.columns(2)
     with lc1:
         _chart(charts.line_chart(recprob.data, "Smoothed US Recession Probability",
                                  color=chart_color("danger"), y_suffix="%",
-                                 recessions=True), key="lead_recprob")
+                                 recessions=True), key="lead_recprob", sample=recprob.is_sample)
     with lc2:
         _chart(charts.line_chart(sent.data, "Consumer Sentiment (UMich)",
-                                 color=chart_color("yellow")), key="lead_sentiment")
+                                 color=chart_color("yellow")), key="lead_sentiment",
+               sample=sent.is_sample)
 
     # Upcoming high-impact US releases.
     cal = fmp.get_economic_calendar()
@@ -355,13 +402,14 @@ def render_crossasset_politics() -> None:
     hist_results = []
     for col, (name, ticker) in zip(cols, config.CROSS_ASSET.items()):
         q = markets.quote(ticker)
-        col.metric(name, fmt_num(q.data["price"], 2), fmt_delta(q.data["change_pct"]))
+        col.metric(name, _mv(q, fmt_num(q.data["price"], 2)),
+                   _md(q, fmt_delta(q.data["change_pct"])))
         h = markets.price_history(ticker, period="1y")
         hist_results.append(h)
         series_map[name] = h.data["Close"]
 
     _chart(charts.normalized_multi(series_map, "Cross-Asset (1Y, rebased to 100)"),
-           key="cross_multi")
+           key="cross_multi", sample=any(h.is_sample for h in hist_results))
 
     # Copper/Gold ratio — a growth/inflation barometer.
     copper = markets.price_history("HG=F", period="1y")
@@ -371,10 +419,12 @@ def render_crossasset_politics() -> None:
     cg1, cg2 = st.columns(2)
     with cg1:
         _chart(charts.line_chart(ratio, "Copper / Gold ratio (growth barometer)",
-                                 color=chart_color("warning")), key="cross_coppergold")
+                                 color=chart_color("warning")), key="cross_coppergold",
+               sample=(copper.is_sample or gold.is_sample))
     with cg2:
         _chart(charts.line_chart(epu.data, "Economic Policy Uncertainty Index",
-                                 color=chart_color("purple")), key="cross_epu")
+                                 color=chart_color("purple")), key="cross_epu",
+               sample=epu.is_sample)
 
     st.info(
         "**Policy & news (v1 placeholder):** live AAII survey, CME FedWatch rate-cut "
@@ -403,7 +453,7 @@ def render_intelligence() -> None:
     from components.charts import _layout as _cl
     fig.update_layout(**_cl(height=280, margin=dict(l=28, r=28, t=14, b=21)))
     fig.update_xaxes(title="Price / Earnings")
-    _chart(fig, key="intel_sector_pe", kind="static")
+    _chart(fig, key="intel_sector_pe", kind="static", sample=pe.is_sample)
     st.caption("Green <25× · amber 25–40× · red >40× (richly valued)")
 
     # --- Analyst spotlight (watchlist) ---
@@ -431,7 +481,8 @@ def render_intelligence() -> None:
         from components.charts import _layout as _cl
         fig2.update_layout(barmode="stack", title="Analyst ratings distribution",
                            **_cl(height=224))
-        _chart(fig2, key="intel_ratings", kind="static")
+        _chart(fig2, key="intel_ratings", kind="static",
+               sample=any(c.is_sample for c in consensus))
     with a2:
         st.dataframe(table[["Symbol", "Rating", "Target Cons."]],
                      hide_index=True, width="stretch", height=320)
