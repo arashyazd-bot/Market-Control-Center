@@ -61,6 +61,9 @@ _FRED_PRESETS = {
     "ig_oas": (1.05, 0.06),
     "umich_sentiment": (69.0, 2.0),
     "policy_uncertainty": (135.0, 25.0),
+    "mortgage_30y": (6.7, 0.08),
+    "recession_prob": (0.5, 0.15),
+    "gdp_growth": (2.2, 0.4),
 }
 
 
@@ -155,6 +158,19 @@ def rating_for(score: float) -> str:
 # ---------------------------------------------------------------------------
 # Valuation
 # ---------------------------------------------------------------------------
+def economic_calendar() -> pd.DataFrame:
+    """Illustrative upcoming US releases (used when no live calendar is available)."""
+    today = pd.Timestamp("2026-06-08")
+    rows = [
+        (today + pd.Timedelta(days=2), "CPI (MoM)", "High", "0.2%", "0.3%"),
+        (today + pd.Timedelta(days=3), "Initial Jobless Claims", "Medium", "220K", "225K"),
+        (today + pd.Timedelta(days=6), "Retail Sales (MoM)", "High", "0.3%", "0.1%"),
+        (today + pd.Timedelta(days=7), "FOMC Rate Decision", "High", "3.50%", "3.50%"),
+        (today + pd.Timedelta(days=9), "U. of Mich. Sentiment", "Medium", "50.5", "49.8"),
+    ]
+    return pd.DataFrame(rows, columns=["date", "event", "impact", "estimate", "previous"])
+
+
 def valuation() -> dict:
     return {
         "cape": 34.5,

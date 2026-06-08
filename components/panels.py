@@ -7,7 +7,7 @@ import streamlit as st
 
 import config
 from components import charts, gauges
-from data import composite, fred, markets, sentiment, valuation
+from data import composite, fmp, fred, macro, markets, sentiment, valuation
 from utils.formatting import fmt_delta, fmt_num, percentile_label
 
 
@@ -129,12 +129,13 @@ def render_sentiment() -> None:
 # ---------------------------------------------------------------------------
 def render_rates_macro() -> None:
     st.subheader("Rates & Macro Cycle")
-    curve = fred.get_yield_curve()
-    s_10y2y = fred.get_series("spread_10y2y")
-    s_10y3m = fred.get_series("spread_10y3m")
-    hy = fred.get_series("hy_oas")
-    ig = fred.get_series("ig_oas")
-    gdp = fred.get_series("gdp_growth")
+    st.caption(f"Active macro source: **{macro.active_source()}** (FMP → FRED → sample)")
+    curve = macro.yield_curve()
+    s_10y2y = macro.spread_series("s10y2y")
+    s_10y3m = macro.spread_series("s10y3m")
+    hy = macro.series("hy_oas")
+    ig = macro.series("ig_oas")
+    gdp = macro.gdp_growth()
     sp = markets.price_history("^GSPC", period="2y")
 
     _chart(charts.yield_curve_chart(curve.data), key="rates_curve")
@@ -158,17 +159,56 @@ def render_rates_macro() -> None:
                key="rates_gdp")
 
     # Macro tiles.
-    unemp = fred.get_series("unemployment")
-    sahm = fred.get_series("sahm")
-    cpi = fred.get_series("cpi")
-    ff = fred.get_series("fed_funds")
+    unemp = macro.series("unemployment")
+    sahm = macro.series("sahm")
+    cpi = macro.series("cpi")
+    ff = macro.series("fed_funds")
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Unemployment", fmt_num(fred.latest(unemp), 1, suffix="%"))
-    m2.metric("Sahm Rule", fmt_num(fred.latest(sahm), 2),
+    m1.metric("Unemployment", fmt_num(macro.latest(unemp), 1, suffix="%"))
+    m2.metric("Sahm Rule", fmt_num(macro.latest(sahm), 2),
               "≥0.50 = recession trigger", delta_color="off")
-    m3.metric("CPI YoY", fmt_num(fred.yoy_change(cpi), 1, suffix="%"))
-    m4.metric("Fed Funds", fmt_num(fred.latest(ff), 2, suffix="%"))
+    m3.metric("CPI YoY", fmt_num(macro.yoy_change(cpi), 1, suffix="%"))
+    m4.metric("Fed Funds", fmt_num(macro.latest(ff), 2, suffix="%"))
+
+    _render_leading_indicators()
     _badge(curve, s_10y2y, s_10y3m, hy, ig, gdp, sp, unemp, sahm, cpi, ff)
+
+
+def _render_leading_indicators() -> None:
+    """Leading / housing / policy block — FMP-tier live macro plus the calendar."""
+    st.divider()
+    st.markdown("##### Leading, Housing & Policy")
+    sent = macro.series("umich_sentiment")
+    claims = macro.series("initial_claims")
+    mortgage = macro.series("mortgage_30y")
+    recprob = macro.series("recession_prob")
+
+    t1, t2, t3, t4 = st.columns(4)
+    t1.metric("Consumer Sentiment", fmt_num(macro.latest(sent), 1),
+              "U. of Michigan", delta_color="off")
+    t2.metric("Initial Claims", fmt_num(macro.latest(claims), 0),
+              "weekly", delta_color="off")
+    t3.metric("30Y Mortgage", fmt_num(macro.latest(mortgage), 2, suffix="%"),
+              "real-estate cost", delta_color="off")
+    t4.metric("Recession Prob.", fmt_num(macro.latest(recprob), 2, suffix="%"),
+              "smoothed (FRED/FMP)", delta_color="off")
+
+    lc1, lc2 = st.columns(2)
+    with lc1:
+        _chart(charts.line_chart(recprob.data, "Smoothed US Recession Probability",
+                                 color="#e63946", y_suffix="%", recessions=True),
+               key="lead_recprob")
+    with lc2:
+        _chart(charts.line_chart(sent.data, "Consumer Sentiment (UMich)",
+                                 color="#e9c46a"), key="lead_sentiment")
+
+    # Upcoming high-impact US releases.
+    cal = fmp.get_economic_calendar()
+    st.markdown("**Upcoming US economic releases**")
+    st.dataframe(cal.data, hide_index=True, width="stretch")
+    if cal.is_sample:
+        st.caption("🟡 sample calendar — live calendar needs an FMP Starter+ plan")
+    _badge(sent, claims, mortgage, recprob)
 
 
 # ---------------------------------------------------------------------------

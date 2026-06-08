@@ -29,13 +29,17 @@ def sidebar() -> None:
         st.caption("State of the US economy, markets & policy — at a glance.")
         st.divider()
 
-        has_key = bool(os.environ.get("FRED_API_KEY"))
-        if has_key:
+        has_fmp = bool(os.environ.get("FMP_API_KEY"))
+        has_fred = bool(os.environ.get("FRED_API_KEY"))
+        if has_fmp:
+            st.success("FMP key detected — live rates/macro via FMP (FRED fallback).")
+        elif has_fred:
             st.success("FRED API key detected — live macro data enabled.")
         else:
             st.warning(
-                "No FRED_API_KEY found. Running on **sample data** for macro/rates.\n\n"
-                "Get a free key at fredaccount.stlouisfed.org and add it to `.env`.")
+                "No FMP_API_KEY or FRED_API_KEY found. Running on **sample data** "
+                "for macro/rates.\n\nAdd a free FRED key (fredaccount.stlouisfed.org) "
+                "or an FMP key to `.env`.")
 
         st.divider()
         if st.button("🔄 Refresh data", width="stretch"):
@@ -47,7 +51,7 @@ def sidebar() -> None:
         st.markdown(
             "**Legend**\n\n"
             "🟢 live source &nbsp;·&nbsp; 🟡 sample fallback\n\n"
-            "Data: FRED · Yahoo Finance · CNN Fear & Greed")
+            "Data: FMP · FRED · Yahoo Finance · CNN Fear & Greed")
 
 
 def main() -> None:

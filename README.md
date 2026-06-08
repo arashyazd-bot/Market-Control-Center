@@ -36,9 +36,19 @@ never ambiguous.
 
 ## Data sources
 
-- **FRED** (St. Louis Fed) — yields, GDP, inflation, labor, credit spreads, policy uncertainty
+Rates/macro resolve in priority order **FMP → FRED → sample**, so the app works
+with either key, both, or neither:
+
+- **FMP** (Financial Modeling Prep, optional `FMP_API_KEY`) — treasury curve, GDP,
+  CPI, unemployment, fed funds, consumer sentiment, initial claims, 30Y mortgage,
+  recession probability, sector performance, economic calendar
+- **FRED** (St. Louis Fed, `FRED_API_KEY`) — yields, GDP, inflation, labor, credit
+  spreads, Sahm rule, policy uncertainty (and fallback for everything FMP lacks)
 - **Yahoo Finance** (`yfinance`) — indices, VIX, sector ETFs, cross-asset prices
 - **CNN Fear & Greed Index** — sentiment
+
+Some FMP endpoints (calendar, index/commodity/forex quotes) require a paid FMP
+tier; the app degrades gracefully to FRED/sample for those.
 
 ## Architecture
 

@@ -49,10 +49,33 @@ FRED_SERIES = {
     # sentiment / policy
     "umich_sentiment": "UMCSENT",
     "policy_uncertainty": "USEPUINDXD",
+    # leading / housing / probability
+    "mortgage_30y": "MORTGAGE30US",
+    "recession_prob": "RECPROUSM156N",
     # valuation inputs
     "wilshire": "WILL5000PR",
     "gdp_nominal": "GDP",
 }
+
+# ---------------------------------------------------------------------------
+# Financial Modeling Prep (FMP) — optional live source (REST API).
+# Set FMP_API_KEY to enable. FMP takes priority over FRED for the keys below;
+# anything FMP lacks (credit spreads, Sahm, policy uncertainty) falls back to
+# FRED, then to bundled sample data.
+# ---------------------------------------------------------------------------
+FMP_BASE_URL = "https://financialmodelingprep.com/stable"
+
+# logical series key -> FMP economic-indicator name
+FMP_INDICATORS = {
+    "cpi": "CPI",
+    "unemployment": "unemploymentRate",
+    "fed_funds": "federalFunds",
+    "umich_sentiment": "consumerSentiment",
+    "initial_claims": "initialClaims",
+    "mortgage_30y": "30YearFixedRateMortgageAverage",
+    "recession_prob": "smoothedUSRecessionProbabilities",
+}
+FMP_REAL_GDP = "realGDP"  # level -> we derive SAAR growth from it
 
 # ---------------------------------------------------------------------------
 # yfinance tickers

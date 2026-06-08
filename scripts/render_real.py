@@ -36,6 +36,21 @@ BTC = {"price": 63782, "chg": 3.07, "ma50": 75807, "ma200": 78476,
        "yr_high": 126296, "yr_low": 59073}
 MACRO = {"gdp_saar": 1.62, "cpi_yoy": 3.78, "unemp": 4.3, "fedfunds": 3.63}
 SPREAD_NOW = {"s10y2y": 0.38, "s10y3m": 0.77, "y10": 4.55, "y2": 4.17, "y3m": 3.78}
+LEADING = {"sentiment": 49.8, "claims": 225000, "mortgage": 6.48, "recprob": 0.44}
+CONSUMER_SENTIMENT = {  # UMich, monthly (real)
+    "2024-06": 68.2, "2024-07": 66.4, "2024-08": 67.9, "2024-09": 70.1,
+    "2024-10": 70.5, "2024-11": 71.8, "2024-12": 74.0, "2025-01": 71.7,
+    "2025-02": 64.7, "2025-03": 57.0, "2025-04": 52.2, "2025-05": 52.2,
+    "2025-06": 60.7, "2025-07": 61.7, "2025-08": 58.2, "2025-09": 55.1,
+    "2025-10": 53.6, "2025-11": 51.0, "2025-12": 52.9, "2026-01": 56.4,
+    "2026-02": 56.6, "2026-03": 53.3, "2026-04": 49.8,
+}
+RECESSION_PROB = {  # smoothed US recession probability, % (real)
+    "2024-01": 2.64, "2024-04": 0.50, "2024-07": 0.86, "2024-10": 0.50,
+    "2025-01": 0.54, "2025-04": 0.52, "2025-07": 0.52, "2025-08": 1.02,
+    "2025-09": 1.26, "2025-10": 1.36, "2025-11": 0.76, "2025-12": 0.40,
+    "2026-01": 0.34, "2026-02": 0.30, "2026-03": 0.46, "2026-04": 0.44,
+}
 
 
 def stack(imgs):
@@ -103,8 +118,33 @@ def main():
     imgs2 = [hdr2, fig_to_img(sector_bar(SECTORS_1D), WIDTH, 430)]
     stack(imgs2).save(f"{OUT}/real_2_sectors_crypto.png")
 
-    print(f"{OUT}/real_1_rates_macro.png")
-    print(f"{OUT}/real_2_sectors_crypto.png")
+    # ---- Panel C: Leading, Housing & Policy (LIVE) ----
+    kpis3 = [
+        ("Consumer Sent.", f"{LEADING['sentiment']:.1f}", "UMich — depressed"),
+        ("Initial Claims", f"{LEADING['claims']:,}", "weekly — healthy"),
+        ("30Y Mortgage", f"{LEADING['mortgage']:.2f}%", "-0.37 yoy"),
+        ("Recession Prob", f"{LEADING['recprob']:.2f}%", "smoothed — low"),
+    ]
+    hdr3 = header_strip("Leading, Housing & Policy — LIVE",
+                        "Real data via FMP MCP  -  2026-06-08", kpis3)
+
+    def _series(d):
+        s = pd.Series({pd.Timestamp(k + "-01"): v for k, v in d.items()}).sort_index()
+        return s
+
+    recprob = _series(RECESSION_PROB)
+    sent = _series(CONSUMER_SENTIMENT)
+    figs3 = [
+        (charts.line_chart(recprob, "Smoothed US Recession Probability (real)",
+                           color="#e63946", y_suffix="%"), 300),
+        (charts.line_chart(sent, "Consumer Sentiment — UMich (real)",
+                           color="#e9c46a"), 300),
+    ]
+    imgs3 = [hdr3] + [fig_to_img(f, WIDTH, h) for f, h in figs3]
+    stack(imgs3).save(f"{OUT}/real_3_leading.png")
+
+    for p in ("real_1_rates_macro", "real_2_sectors_crypto", "real_3_leading"):
+        print(f"{OUT}/{p}.png")
 
 
 if __name__ == "__main__":
