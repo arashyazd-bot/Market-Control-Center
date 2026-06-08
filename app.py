@@ -341,7 +341,10 @@ def main() -> None:
 
     _inject_css(dark)
     sidebar(dark)
-    panels.warm_caches()   # parallel prefetch so panels hit warm caches
+    # NOTE: warm_caches() (parallel prefetch) is intentionally NOT called here.
+    # On Render's servers yfinance is throttled, so prefetching every tab's data
+    # up front blocked the whole render. Panels fetch lazily with sample fallback
+    # instead. Re-enable only once the data fetches have hard network timeouts.
     ticker_strip()
 
     st.markdown(f"""
