@@ -7,7 +7,18 @@ import streamlit as st
 
 import config
 from data import DataResult
+from data import fmp
 from data import sample
+
+# yfinance ticker -> FMP symbol, only for symbols FMP's tier actually serves.
+# FMP works from cloud IPs (Render) where yfinance is throttled, so we prefer it
+# for these and fall back to yfinance (live locally) then sample for the rest
+# (sector ETFs, RSP, oil, copper, DXY, ^TNX are 402/premium on FMP).
+_FMP_MAP = {
+    "^GSPC": "^GSPC", "^DJI": "^DJI", "^IXIC": "^IXIC", "^VIX": "^VIX",
+    "SPY": "SPY", "GC=F": "GCUSD", "BTC-USD": "BTCUSD",
+}
+_PERIOD_DAYS = {"1mo": 35, "1y": 400, "2y": 760, "5y": 1850, "10y": 3800}
 
 
 def _yf():
@@ -21,6 +32,14 @@ def _yf():
 
 @st.cache_data(ttl=config.TTL_MARKETS, show_spinner=False)
 def price_history(ticker: str, period: str = "1y") -> DataResult:
+    # Prefer FMP for supported symbols (works on Render); fall back to yfinance.
+    if ticker in _FMP_MAP:
+        days = _PERIOD_DAYS.get(period, 400)
+        start = (pd.Timestamp.today() - pd.Timedelta(days=days)).strftime("%Y-%m-%d")
+        r = fmp.get_history(_FMP_MAP[ticker], start)
+        if not r.is_sample and r.data is not None and len(r.data):
+            return DataResult(pd.DataFrame({"Close": r.data}), is_sample=False)
+
     yf = _yf()
     if yf is None:
         return DataResult(sample.price_history(ticker), is_sample=True, note="yfinance missing")
@@ -38,6 +57,12 @@ def price_history(ticker: str, period: str = "1y") -> DataResult:
 @st.cache_data(ttl=config.TTL_MARKETS, show_spinner=False)
 def quote(ticker: str) -> DataResult:
     """Latest price + 1-day % change."""
+    # Prefer FMP's quote for supported symbols (live on Render).
+    if ticker in _FMP_MAP:
+        r = fmp.get_quote(_FMP_MAP[ticker])
+        if not r.is_sample and r.data:
+            return r
+
     res = price_history(ticker, period="1mo")
     df = res.data
     try:

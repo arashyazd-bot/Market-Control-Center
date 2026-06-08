@@ -120,6 +120,41 @@ def get_gdp_growth() -> DataResult:
 
 
 @st.cache_data(ttl=config.TTL_MARKETS, show_spinner=False)
+def get_quote(symbol: str) -> DataResult:
+    """Latest price + 1-day % change for an FMP symbol (index/ETF/commodity/
+    crypto). Returns is_sample=True with data=None on any failure (incl. 402
+    'premium' symbols) so the caller can fall back to another source."""
+    if not available():
+        return DataResult(None, is_sample=True, note="no FMP key")
+    try:
+        d = _get("quote", symbol=symbol)[0]
+        return DataResult({"price": float(d["price"]),
+                           "change_pct": float(d["changePercentage"])}, is_sample=False)
+    except Exception as exc:
+        return DataResult(None, is_sample=True, note=str(exc)[:80])
+
+
+@st.cache_data(ttl=config.TTL_MARKETS, show_spinner=False)
+def get_history(symbol: str, start: str) -> DataResult:
+    """Daily close history (Series) from FMP's EOD endpoint, ``start`` -> today.
+    is_sample=True with data=None on failure so the caller can fall back."""
+    if not available():
+        return DataResult(None, is_sample=True, note="no FMP key")
+    try:
+        rows = _get("historical-price-eod/full", symbol=symbol,
+                    **{"from": start, "to": pd.Timestamp.today().strftime("%Y-%m-%d")})
+        df = pd.DataFrame(rows)
+        col = "adjClose" if "adjClose" in df else "close"
+        s = pd.Series(df[col].values, index=pd.to_datetime(df["date"])).sort_index()
+        s = s[~s.index.duplicated(keep="last")]
+        if s.empty:
+            raise ValueError("empty history")
+        return DataResult(s, is_sample=False)
+    except Exception as exc:
+        return DataResult(None, is_sample=True, note=str(exc)[:80])
+
+
+@st.cache_data(ttl=config.TTL_MARKETS, show_spinner=False)
 def get_sector_performance() -> DataResult:
     """Latest single-day average % change by sector (FMP snapshot)."""
     if not available():
