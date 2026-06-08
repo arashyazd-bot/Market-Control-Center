@@ -1,17 +1,18 @@
 """Plotly gauge builders: the Fear & Greed dial and the composite regime light.
 
-Both dials share one geometry (_GAUGE_*) so they render at identical size and
-align side-by-side in the Overview columns."""
+The dials are drawn title-less and share one geometry (_GAUGE_*) so they render
+at identical size. Titles are rendered as aligned markdown above each dial in
+panels.py — Plotly's own indicator-title auto-layout placed the two titles at
+different heights and let the subtitle overlap the arc."""
 from __future__ import annotations
 
 import plotly.graph_objects as go
 import streamlit as st
 
 # Shared geometry — keep the two dials the same size and vertically aligned.
-_GAUGE_HEIGHT = 320
-_GAUGE_MARGIN = dict(l=40, r=40, t=70, b=24)
+_GAUGE_HEIGHT = 300
+_GAUGE_MARGIN = dict(l=40, r=40, t=16, b=20)
 _GAUGE_NUMBER_SIZE = 42
-_GAUGE_TITLE_SIZE = 16
 _GAUGE_FONT = "Figtree, system-ui, sans-serif"
 
 
@@ -41,14 +42,11 @@ def _apply_layout(fig: go.Figure) -> None:
     )
 
 
-def fear_greed_gauge(score: float, rating: str) -> go.Figure:
+def fear_greed_gauge(score: float) -> go.Figure:
     fc = _font_color()
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=score,
-        title={"text": f"Fear &amp; Greed<br>"
-                       f"<span style='font-size:0.95em'>{rating}</span>",
-               "font": {"size": _GAUGE_TITLE_SIZE, "color": fc}},
         number={"font": {"size": _GAUGE_NUMBER_SIZE, "color": fc}},
         gauge={
             "axis": {"range": [0, 100], "tickwidth": 1,
@@ -67,7 +65,7 @@ def fear_greed_gauge(score: float, rating: str) -> go.Figure:
     return fig
 
 
-def regime_gauge(score: float, label: str, color: str) -> go.Figure:
+def regime_gauge(score: float, color: str) -> go.Figure:
     fc = _font_color()
     dark = _dark()
     red = "#F4564A" if dark else "#C8102E"
@@ -75,9 +73,6 @@ def regime_gauge(score: float, label: str, color: str) -> go.Figure:
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=score,
-        title={"text": f"Market Regime<br>"
-                       f"<span style='font-size:0.95em;color:{color}'><b>{label}</b></span>",
-               "font": {"size": _GAUGE_TITLE_SIZE, "color": fc}},
         number={"valueformat": ".2f", "font": {"size": _GAUGE_NUMBER_SIZE, "color": color}},
         gauge={
             "axis": {"range": [-1, 1], "tickvals": [-1, -0.33, 0.33, 1],

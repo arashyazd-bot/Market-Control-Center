@@ -71,6 +71,18 @@ def _chart(fig, key: str, kind: str = "timeline") -> None:
     st.plotly_chart(fig, use_container_width=True, key=key, config=cfg)
 
 
+def _gauge_header(main: str, sub: str, sub_color: str | None = None) -> None:
+    """Centered title above a dial. Rendered in markdown (not inside the Plotly
+    indicator) so both dials' titles align and never overlap the arc."""
+    sc = sub_color or "var(--c-sub)"
+    st.markdown(
+        f"<div style='text-align:center;font-family:Figtree,system-ui,sans-serif;"
+        f"line-height:1.25;margin:0 0 -6px'>"
+        f"<div style='font-size:1.05rem;font-weight:700;color:var(--c-text)'>{main}</div>"
+        f"<div style='font-size:0.95rem;font-weight:600;color:{sc}'>{sub}</div>"
+        f"</div>", unsafe_allow_html=True)
+
+
 # ---------------------------------------------------------------------------
 # 1. Overview
 # ---------------------------------------------------------------------------
@@ -95,11 +107,12 @@ def render_overview() -> None:
     st.divider()
     g1, g2 = st.columns(2)
     with g1:
-        _chart(gauges.regime_gauge(regime.data["score"], regime.data["label"],
-                                   regime.data["color"]), key="overview_regime",
-               kind="gauge")
+        _gauge_header("Market Regime", regime.data["label"], regime.data["color"])
+        _chart(gauges.regime_gauge(regime.data["score"], regime.data["color"]),
+               key="overview_regime", kind="gauge")
     with g2:
-        _chart(gauges.fear_greed_gauge(fg.data["score"], fg.data["rating"]),
+        _gauge_header("Fear &amp; Greed", fg.data["rating"])
+        _chart(gauges.fear_greed_gauge(fg.data["score"]),
                key="overview_feargreed", kind="gauge")
 
     with st.expander("How the regime score is built"):
@@ -162,7 +175,8 @@ def render_sentiment() -> None:
 
     c1, c2 = st.columns([1, 2])
     with c1:
-        _chart(gauges.fear_greed_gauge(fg.data["score"], fg.data["rating"]),
+        _gauge_header("Fear &amp; Greed", fg.data["rating"])
+        _chart(gauges.fear_greed_gauge(fg.data["score"]),
                key="sent_feargreed", kind="gauge")
         st.metric("Breadth: Equal-wt − Cap-wt (YTD)",
                   fmt_num(concentration.data, 1, suffix="%"),
