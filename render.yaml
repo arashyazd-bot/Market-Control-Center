@@ -1,0 +1,19 @@
+# Render Blueprint — deploy with "New > Blueprint" and point at this repo.
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: market-timing-dashboard
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # Render injects $PORT; Streamlit must bind it on 0.0.0.0 or the health check fails.
+    startCommand: streamlit run app.py --server.port $PORT --server.address 0.0.0.0
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.15"
+      # Free macro/rates data. Set the value in the Render dashboard (kept out of git).
+      - key: FRED_API_KEY
+        sync: false
+      # Free-tier stock/sector data (Market Intelligence tab). Set in the dashboard.
+      - key: FMP_API_KEY
+        sync: false

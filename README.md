@@ -35,6 +35,18 @@ The dashboard **runs with no setup** — without a FRED key or internet it rende
 bundled sample data, flagged with a 🟡 badge per panel so live vs. sample state is
 never ambiguous.
 
+## Deploy on Render
+
+The repo ships a `render.yaml` blueprint. In Render: **New ▸ Blueprint**, point at
+this repo, and add your `FRED_API_KEY` / `FMP_API_KEY` values (they're declared with
+`sync: false`, so they stay out of git). The blueprint sets the build and start
+commands — Streamlit binds Render's `$PORT` on `0.0.0.0` automatically.
+
+To wire it up manually instead, use:
+
+- **Build:** `pip install -r requirements.txt`
+- **Start:** `streamlit run app.py --server.port $PORT --server.address 0.0.0.0`
+
 ## Data sources
 
 Rates/macro resolve in priority order **FMP → FRED → sample**, so the app works
