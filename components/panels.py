@@ -189,7 +189,9 @@ def render_rates_macro() -> None:
     hy = macro.series("hy_oas")
     ig = macro.series("ig_oas")
     gdp = macro.gdp_growth()
-    sp = markets.price_history("^GSPC", period="2y")
+    # 10y of prices so the YoY series spans multiple years and reads as a real
+    # comparison against GDP (dual_axis_chart aligns them to their shared window).
+    sp = markets.price_history("^GSPC", period="10y")
 
     _chart(charts.yield_curve_chart(curve.data), key="rates_curve", kind="static")
 

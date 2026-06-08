@@ -163,6 +163,21 @@ def yield_curve_chart(curve: pd.Series) -> go.Figure:
 
 def dual_axis_chart(left: pd.Series, right: pd.Series, left_name: str,
                     right_name: str, title: str, recessions: bool = True) -> go.Figure:
+    """Two series on independent y-axes. The series are clipped to the window
+    where BOTH have data and the x-axis is pinned to it, so a long series (e.g.
+    multi-year GDP) can't squash a shorter one (e.g. S&P YoY) into a sliver."""
+    left = left.dropna()
+    right = right.dropna()
+    start = end = None
+    if len(left) and len(right):
+        start = max(left.index.min(), right.index.min())
+        end = min(left.index.max(), right.index.max())
+        if start < end:
+            left = left.loc[start:end]
+            right = right.loc[start:end]
+        else:
+            start = end = None
+
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     fig.add_trace(go.Scatter(x=left.index, y=left.values, name=left_name,
                              line=dict(color=c("warning"), width=2.5)),
@@ -173,6 +188,8 @@ def dual_axis_chart(left: pd.Series, right: pd.Series, left_name: str,
     fig.update_layout(title=title, **_layout())
     fig.update_yaxes(title=left_name, secondary_y=False)
     fig.update_yaxes(title=right_name, secondary_y=True)
+    if start is not None:
+        fig.update_xaxes(range=[start, end])
     if recessions:
         rng = _xrange(left, right)
         if rng:
