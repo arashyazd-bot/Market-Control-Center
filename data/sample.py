@@ -16,7 +16,11 @@ def _daily_index(days: int) -> pd.DatetimeIndex:
 
 
 def _seed(name: str) -> np.random.Generator:
-    return np.random.default_rng(abs(hash(name)) % (2**32))
+    # Stable across processes (Python's str hash is randomized per run).
+    import hashlib
+
+    digest = hashlib.md5(name.encode()).hexdigest()
+    return np.random.default_rng(int(digest[:8], 16))
 
 
 def _random_walk(name: str, start: float, days: int, vol: float, drift: float = 0.0) -> pd.Series:
