@@ -9,12 +9,21 @@ import config
 import plotly.graph_objects as go
 
 from components import charts, gauges
+from components.charts import c as chart_color
 from data import composite, fmp, fred, macro, markets, sentiment, valuation
 from utils.formatting import fmt_delta, fmt_num, percentile_label
 
 
+_CHART_CONFIG = {
+    "scrollZoom": True,          # two-finger scroll/pinch to zoom timeline
+    "displayModeBar": True,
+    "modeBarButtonsToRemove": ["lasso2d", "select2d"],
+    "displaylogo": False,
+    "doubleClick": "reset",      # double-tap resets zoom
+}
+
+
 def _badge(*results) -> None:
-    """Render a small caption noting whether any source fell back to sample data."""
     sample_notes = [r.note for r in results if getattr(r, "is_sample", False)]
     if sample_notes:
         st.caption(f"🟡 sample data in use ({len(sample_notes)} source(s)) — "
@@ -24,7 +33,7 @@ def _badge(*results) -> None:
 
 
 def _chart(fig, key: str) -> None:
-    st.plotly_chart(fig, width="stretch", key=key)
+    st.plotly_chart(fig, use_container_width=True, key=key, config=_CHART_CONFIG)
 
 
 # ---------------------------------------------------------------------------
@@ -118,10 +127,10 @@ def render_sentiment() -> None:
                   "negative = narrow / mega-cap led", delta_color="off")
     with c2:
         _chart(charts.line_chart(fg.data["history"], "Fear & Greed (1Y)",
-                                 color="#e9c46a"), key="sent_fg_hist")
+                                 color=chart_color("yellow")), key="sent_fg_hist")
 
-    _chart(charts.line_chart(vix_hist.data["Close"], "VIX (1Y)", color="#e63946"),
-           key="sent_vix")
+    _chart(charts.line_chart(vix_hist.data["Close"], "VIX (1Y)",
+                             color=chart_color("danger")), key="sent_vix")
     _chart(charts.sector_heatmap(sectors.data), key="sent_sectors")
     _badge(fg, vix_hist, sectors, concentration)
 
@@ -152,8 +161,8 @@ def render_rates_macro() -> None:
     cc1, cc2 = st.columns(2)
     with cc1:
         _chart(charts.line_chart(hy.data, "High-Yield Credit Spread (OAS)",
-                                 color="#e63946", y_suffix="%", recessions=True),
-               key="rates_hy")
+                                 color=chart_color("danger"), y_suffix="%",
+                                 recessions=True), key="rates_hy")
     with cc2:
         sp_yoy = (sp.data["Close"].pct_change(252) * 100).dropna()
         _chart(charts.dual_axis_chart(gdp.data, sp_yoy, "Real GDP growth %",
@@ -198,11 +207,11 @@ def _render_leading_indicators() -> None:
     lc1, lc2 = st.columns(2)
     with lc1:
         _chart(charts.line_chart(recprob.data, "Smoothed US Recession Probability",
-                                 color="#e63946", y_suffix="%", recessions=True),
-               key="lead_recprob")
+                                 color=chart_color("danger"), y_suffix="%",
+                                 recessions=True), key="lead_recprob")
     with lc2:
         _chart(charts.line_chart(sent.data, "Consumer Sentiment (UMich)",
-                                 color="#e9c46a"), key="lead_sentiment")
+                                 color=chart_color("yellow")), key="lead_sentiment")
 
     # Upcoming high-impact US releases.
     cal = fmp.get_economic_calendar()
@@ -240,10 +249,10 @@ def render_crossasset_politics() -> None:
     cg1, cg2 = st.columns(2)
     with cg1:
         _chart(charts.line_chart(ratio, "Copper / Gold ratio (growth barometer)",
-                                 color="#f4a261"), key="cross_coppergold")
+                                 color=chart_color("warning")), key="cross_coppergold")
     with cg2:
         _chart(charts.line_chart(epu.data, "Economic Policy Uncertainty Index",
-                                 color="#b5179e"), key="cross_epu")
+                                 color=chart_color("purple")), key="cross_epu")
 
     st.info(
         "**Policy & news (v1 placeholder):** live AAII survey, CME FedWatch rate-cut "
@@ -263,14 +272,14 @@ def render_intelligence() -> None:
     st.markdown("##### Sector Valuation (trailing P/E)")
     pe = fmp.get_sector_pe()
     df_pe = pe.data.sort_values("pe")
-    colors = ["#2a9d8f" if v < 25 else "#e9c46a" if v < 40 else "#e63946"
+    colors = [chart_color("success") if v < 25 else
+              chart_color("yellow") if v < 40 else chart_color("danger")
               for v in df_pe["pe"]]
     fig = go.Figure(go.Bar(
         x=df_pe["pe"], y=df_pe["sector"], orientation="h", marker_color=colors,
         text=[f"{v:.0f}×" for v in df_pe["pe"]], textposition="outside"))
-    fig.update_layout(template="plotly_dark", height=400,
-                      margin=dict(l=40, r=40, t=20, b=30),
-                      paper_bgcolor="rgba(0,0,0,0)")
+    from components.charts import _layout as _cl
+    fig.update_layout(**_cl(height=400, margin=dict(l=40, r=40, t=20, b=30)))
     fig.update_xaxes(title="Price / Earnings")
     _chart(fig, key="intel_sector_pe")
     st.caption("Green <25× · amber 25–40× · red >40× (richly valued)")
@@ -292,15 +301,14 @@ def render_intelligence() -> None:
         fig2 = go.Figure()
         syms = table["Symbol"]
         fig2.add_bar(y=syms, x=table["Buy"], name="Buy", orientation="h",
-                     marker_color="#2a9d8f")
+                     marker_color=chart_color("success"))
         fig2.add_bar(y=syms, x=table["Hold"], name="Hold", orientation="h",
-                     marker_color="#e9c46a")
+                     marker_color=chart_color("yellow"))
         fig2.add_bar(y=syms, x=table["Sell"], name="Sell", orientation="h",
-                     marker_color="#e63946")
-        fig2.update_layout(barmode="stack", template="plotly_dark", height=320,
-                           title="Analyst ratings distribution",
-                           margin=dict(l=40, r=20, t=50, b=30),
-                           paper_bgcolor="rgba(0,0,0,0)")
+                     marker_color=chart_color("danger"))
+        from components.charts import _layout as _cl
+        fig2.update_layout(barmode="stack", title="Analyst ratings distribution",
+                           **_cl(height=320))
         _chart(fig2, key="intel_ratings")
     with a2:
         st.dataframe(table[["Symbol", "Rating", "Target Cons."]],
