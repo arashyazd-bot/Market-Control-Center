@@ -40,7 +40,7 @@ def available() -> bool:
 
 def _get(path: str, **params) -> list:
     params["apikey"] = _key()
-    resp = requests.get(f"{config.FMP_BASE_URL}/{path}", params=params, timeout=12)
+    resp = requests.get(f"{config.FMP_BASE_URL}/{path}", params=params, timeout=8)
     resp.raise_for_status()
     data = resp.json()
     if isinstance(data, dict) and data.get("Error Message"):
