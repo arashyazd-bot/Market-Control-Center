@@ -3,7 +3,7 @@ layer, surfaces a live/sample badge, and draws charts via components.charts."""
 from __future__ import annotations
 
 import threading
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 
 import pandas as pd
 import streamlit as st
@@ -23,11 +23,15 @@ except Exception:  # pragma: no cover - shifts with Streamlit version
     add_script_run_ctx = get_script_run_ctx = None
 
 
-def warm_caches() -> None:
-    """Fetch every independent data series concurrently to warm the
-    st.cache_data caches before any panel renders. Panels then hit warm caches
-    instead of fetching ~40 series sequentially (~8.5s -> a few seconds). Once
-    the caches are warm this is a fast no-op, so it is safe to call every run.
+def warm_caches(budget_s: float = 4.0) -> None:
+    """Fetch independent data series concurrently to warm the st.cache_data
+    caches before panels render.
+
+    BOUNDED: the render waits at most ``budget_s`` seconds; any slow fetch keeps
+    running in a background thread and populates the cache for later interactions,
+    so this can never stall the page (the bug that hung the live site when a
+    blocking prefetch hit Render-throttled yfinance). Every underlying fetch also
+    has its own network timeout. A fast no-op once the caches are warm.
     """
     ctx = get_script_run_ctx() if get_script_run_ctx else None
 
@@ -69,8 +73,10 @@ def warm_caches() -> None:
         except Exception:
             pass  # panels re-fetch and surface their own sample/live badge
 
-    with ThreadPoolExecutor(max_workers=8) as ex:
-        list(ex.map(run, thunks))
+    ex = ThreadPoolExecutor(max_workers=8)
+    futures = [ex.submit(run, fn) for fn in thunks]
+    wait(futures, timeout=budget_s)   # proceed after budget; stragglers finish in bg
+    ex.shutdown(wait=False)
 
 
 # Timelines + the sector-strength heatmap: zoom/pan via drag + modebar, but

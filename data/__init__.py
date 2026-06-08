@@ -3,8 +3,14 @@
 to bundled data — the dashboard never silently fakes state."""
 from __future__ import annotations
 
+import socket
 from dataclasses import dataclass, field
 from typing import Any
+
+# Backstop: bound any socket that doesn't set its own timeout (e.g. fredapi's
+# urllib calls) so a stalled connection can never hang a render. requests-based
+# fetches set their own (shorter) timeouts, which take precedence.
+socket.setdefaulttimeout(10)
 
 
 @dataclass
