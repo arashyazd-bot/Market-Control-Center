@@ -11,7 +11,8 @@ import plotly.graph_objects as go
 from components import charts, gauges
 from components.charts import c as chart_color
 from data import composite, fmp, fred, macro, markets, sentiment, valuation
-from utils.formatting import fmt_delta, fmt_num, percentile_label
+from utils.formatting import (fmt_delta, fmt_num, good_bad_color,
+                              percentile_label, valuation_verdict_good)
 
 
 # Timelines + the sector-strength heatmap: zoom/pan via drag + modebar, but
@@ -123,12 +124,18 @@ def render_valuation() -> None:
     v = val.data
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("Shiller CAPE", fmt_num(v["cape"], 1),
-              percentile_label(v.get("cape_pct", float("nan"))), delta_color="off")
-    c2.metric("Buffett Indicator", fmt_num(v["buffett"], 0, suffix="%"),
-              percentile_label(v.get("buffett_pct", float("nan"))), delta_color="off")
-    c3.metric("Equity Risk Premium", fmt_num(v["erp"], 2, suffix="%"),
-              "earnings yield − 10Y", delta_color="off")
+    cape_lbl = percentile_label(v.get("cape_pct", float("nan")))
+    c1.metric("Shiller CAPE", fmt_num(v["cape"], 1), cape_lbl,
+              delta_color=good_bad_color(valuation_verdict_good(cape_lbl)))
+    buf_lbl = percentile_label(v.get("buffett_pct", float("nan")))
+    c2.metric("Buffett Indicator", fmt_num(v["buffett"], 0, suffix="%"), buf_lbl,
+              delta_color=good_bad_color(valuation_verdict_good(buf_lbl)))
+    # ERP: a positive equity risk premium (stocks yield more than 10Y) is good;
+    # negative is a late-cycle warning (bad). NaN -> neutral.
+    erp = v.get("erp", float("nan"))
+    erp_good = None if erp != erp else (erp >= 0)   # NaN != NaN
+    c3.metric("Equity Risk Premium", fmt_num(erp, 2, suffix="%"),
+              "earnings yield − 10Y", delta_color=good_bad_color(erp_good))
 
     c4, c5, c6 = st.columns(3)
     c4.metric("Trailing P/E", fmt_num(v["pe_ttm"], 1))
