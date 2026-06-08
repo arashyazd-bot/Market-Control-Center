@@ -136,8 +136,8 @@ def _gauge_header(main: str, sub: str, sub_color: str | None = None) -> None:
     st.markdown(
         f"<div style='text-align:center;font-family:Figtree,system-ui,sans-serif;"
         f"line-height:1.25;margin:0 0 -6px'>"
-        f"<div style='font-size:1.05rem;font-weight:700;color:var(--c-text)'>{main}</div>"
-        f"<div style='font-size:0.95rem;font-weight:600;color:{sc}'>{sub}</div>"
+        f"<div style='font-size:1.23rem;font-weight:700;color:var(--c-text)'>{main}</div>"
+        f"<div style='font-size:1.13rem;font-weight:600;color:{sc}'>{sub}</div>"
         f"</div>", unsafe_allow_html=True)
 
 

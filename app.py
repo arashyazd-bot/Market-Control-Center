@@ -47,8 +47,8 @@ h1, h2, h3, h4, h5, h6 {
     letter-spacing: -0.01em !important;
 }
 h1 { font-size: 1.7rem !important; }
-h2 { font-size: 1.35rem !important; }
-h3 { font-size: 1.15rem !important; }
+h2 { font-size: 1.5rem !important; }
+h3, h4, h5, h6 { font-size: 1.35rem !important; }
 
 /* tabular figures everywhere numbers matter */
 [data-testid="stMetricValue"],
@@ -66,7 +66,7 @@ h3 { font-size: 1.15rem !important; }
     background: var(--c-card);
 }
 [data-testid="stMetricLabel"] > div {
-    font-size: 0.68rem !important;
+    font-size: 1.0rem !important;
     font-weight: 600 !important;
     letter-spacing: 0.04em !important;
     text-transform: uppercase !important;
@@ -80,7 +80,7 @@ h3 { font-size: 1.15rem !important; }
     color: var(--c-text) !important;
     white-space: nowrap !important;
 }
-[data-testid="stMetricDelta"] { font-size: 0.82rem !important; }
+[data-testid="stMetricDelta"] { font-size: 1.0rem !important; }
 
 /* ── Tabs — clean text tabs, underline on active (Fidelity style) ── */
 .stTabs [data-baseweb="tab-list"] {
@@ -89,7 +89,7 @@ h3 { font-size: 1.15rem !important; }
     border-bottom: 1px solid var(--c-border) !important;
 }
 .stTabs [data-baseweb="tab"] {
-    font-size: 0.86rem !important;
+    font-size: 1.05rem !important;
     font-weight: 600 !important;
     letter-spacing: 0.01em !important;
     padding: 6px 11px !important;
@@ -106,7 +106,7 @@ h3 { font-size: 1.15rem !important; }
 
 /* ── Buttons ── */
 .stButton > button {
-    font-size: 0.84rem !important;
+    font-size: 1.0rem !important;
     font-weight: 600 !important;
     border-radius: 5px !important;
     min-height: 30px !important;
@@ -120,7 +120,12 @@ h3 { font-size: 1.15rem !important; }
     background: var(--c-btn-hover) !important;
 }
 
-.stCaption > p { font-size: 0.78rem !important; color: var(--c-muted) !important; }
+.stCaption > p,
+[data-testid="stCaptionContainer"],
+[data-testid="stCaptionContainer"] p {
+    font-size: 1.05rem !important;          /* descriptions +~2px, >= 11px floor */
+    color: var(--c-muted) !important;
+}
 
 details {
     border: 1px solid var(--c-border) !important;
@@ -143,11 +148,11 @@ header[data-testid="stHeader"] {
     padding: 0.35rem 0 0.6rem;
     margin-bottom: 0.3rem;
     border-bottom: 1px solid var(--c-border);
-    font-size: 0.82rem;
+    font-size: 1.0rem;
 }
 .mcc-ti { white-space: nowrap; }
 .mcc-tn { color: var(--c-sub); font-weight: 700; letter-spacing: 0.02em;
-          font-size: 0.74rem; text-transform: uppercase; margin-right: 0.4rem; }
+          font-size: 1.0rem; text-transform: uppercase; margin-right: 0.4rem; }
 .mcc-tv { color: var(--c-text); font-weight: 600; margin-right: 0.35rem; }
 .mcc-up   { color: var(--c-up);   font-weight: 600; }
 .mcc-down { color: var(--c-down); font-weight: 600; }
@@ -160,7 +165,7 @@ header[data-testid="stHeader"] {
     margin-bottom: 0.9rem;
 }
 .mcc-eyebrow {
-    font-size: 0.64rem; font-weight: 700; letter-spacing: 0.14em;
+    font-size: 1.0rem; font-weight: 700; letter-spacing: 0.14em;
     text-transform: uppercase; color: var(--c-accent); margin-bottom: 0.25rem;
 }
 .mcc-title {
@@ -168,7 +173,7 @@ header[data-testid="stHeader"] {
     letter-spacing: -0.02em; margin: 0; line-height: 1.05;
 }
 .mcc-meta {
-    text-align: right; font-size: 0.7rem; color: var(--c-muted); line-height: 1.7;
+    text-align: right; font-size: 1.0rem; color: var(--c-muted); line-height: 1.7;
 }
 .mcc-live-dot {
     display: inline-block; width: 4px; height: 4px; border-radius: 50%;
@@ -288,7 +293,7 @@ def sidebar(dark: bool) -> None:
         text_color = "#E6EAF0" if dark else "#1A1A1A"
         st.markdown(f"""
 <div style="font-family:'Figtree',sans-serif;padding:0.4rem 0 0.2rem">
-  <div style="font-size:0.62rem;letter-spacing:0.14em;color:{accent};
+  <div style="font-size:1.0rem;letter-spacing:0.14em;color:{accent};
               text-transform:uppercase;font-weight:700;margin-bottom:4px">
     Market Control Center
   </div>

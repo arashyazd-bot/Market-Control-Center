@@ -74,10 +74,10 @@ def _layout(**extra) -> dict:
         height=224,
         hovermode="x unified",
         dragmode="pan",          # click-drag pans; modebar/box zooms
-        font=dict(size=9, color=fc, family="Figtree, system-ui, sans-serif"),
-        xaxis=dict(gridcolor=gc, zerolinecolor=gc, tickfont=dict(size=9)),
-        yaxis=dict(gridcolor=gc, zerolinecolor=gc, tickfont=dict(size=9)),
-        legend=dict(font=dict(size=9)),
+        font=dict(size=11, color=fc, family="Figtree, system-ui, sans-serif"),
+        xaxis=dict(gridcolor=gc, zerolinecolor=gc, tickfont=dict(size=11)),
+        yaxis=dict(gridcolor=gc, zerolinecolor=gc, tickfont=dict(size=11)),
+        legend=dict(font=dict(size=11)),
     )
     base.update(extra)
     return base
@@ -98,7 +98,7 @@ def add_recession_shading(fig: go.Figure, x_start, x_end, label: bool = True) ->
             x0=lo, x1=hi, fillcolor=shc, line_width=0, layer="below",
             annotation_text="Recession" if (label and not labeled) else None,
             annotation_position="top left",
-            annotation=dict(font=dict(size=8, color="#9aa0a6")),
+            annotation=dict(font=dict(size=11, color="#9aa0a6")),
         )
         labeled = True
     return fig
