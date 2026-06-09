@@ -31,6 +31,7 @@ class DataResult:
     is_sample: bool = False
     note: str = ""
     meta: dict = field(default_factory=dict)
+    source: str = "sample"   # provenance: which provider served this value
 
     @property
     def badge(self) -> str:

@@ -213,6 +213,22 @@ header[data-testid="stHeader"] {
     animation: mcc-pulse 2.5s ease-in-out infinite;
 }
 @keyframes mcc-pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+/* ── Executive summary card ── */
+.mcc-exec {
+    border: 1px solid var(--c-border);
+    border-left: 4px solid var(--c-accent);
+    background: var(--c-card);
+    border-radius: 8px;
+    padding: 0.7rem 1.05rem 0.45rem;
+    margin: 0.1rem 0 1rem;
+}
+.mcc-exec-h {
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--c-accent); margin-bottom: 0.3rem;
+}
+.mcc-exec ul { margin: 0; padding-left: 1.1rem; }
+.mcc-exec li { margin: 0.18rem 0; font-size: 1.0rem; color: var(--c-text); line-height: 1.5; }
 </style>
 """
 

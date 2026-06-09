@@ -3,6 +3,7 @@
 Risk-Off / Neutral / Risk-On label."""
 from __future__ import annotations
 
+import pandas as pd
 import streamlit as st
 
 import config
@@ -84,4 +85,55 @@ def compute_regime() -> DataResult:
     return DataResult(
         {"score": score, "label": label, "color": color, "components": components},
         is_sample=is_sample,
+        source="derived" if not is_sample else "sample",
     )
+
+
+@st.cache_data(ttl=config.TTL_MACRO, show_spinner=False)
+def regime_history(years: int = 8) -> DataResult:
+    """Historical composite regime, monthly, from the components that HAVE
+    history (curve slope, HY credit, VIX, S&P-vs-200DMA, Sahm) — re-weighted and
+    scored with the same mappings. Plotted vs NBER recessions for credibility."""
+    keys = ["yield_curve", "credit", "vix", "trend", "sahm"]
+    w = {k: config.COMPOSITE_WEIGHTS[k] for k in keys}
+    tot = sum(w.values())
+
+    sl = macro.spread_series("s10y2y")
+    hy = macro.series("hy_oas")
+    vixh = markets.price_history("^VIX", period="10y")
+    spyh = markets.price_history("SPY", period="10y")
+    sahm = macro.series("sahm")
+    is_sample = any(r.is_sample for r in (sl, hy, vixh, spyh, sahm))
+
+    def _m(s):
+        try:
+            return s.resample("ME").last()
+        except Exception:
+            return s
+
+    try:
+        spy = spyh.data["Close"]
+        df = pd.DataFrame({
+            "yield_curve": _m(sl.data),
+            "credit": _m(hy.data),
+            "vix": _m(vixh.data["Close"]),
+            "trend": _m((spy / spy.rolling(200).mean() - 1) * 100),
+            "sahm": _m(sahm.data),
+        }).dropna(how="all").iloc[-years * 12:]
+
+        sc = pd.DataFrame(index=df.index)
+        sc["yield_curve"] = df["yield_curve"].map(lambda v: _lin(v, -1.0, 1.0))
+        sc["credit"] = df["credit"].map(lambda v: _lin(v, config.HY_OAS_WIDE, config.HY_OAS_TIGHT))
+        sc["vix"] = df["vix"].map(lambda v: _lin(v, config.VIX_PANIC, config.VIX_CALM))
+        sc["trend"] = df["trend"].map(lambda v: _lin(v, -10, 10))
+        sc["sahm"] = df["sahm"].map(lambda v: _lin(v, 1.0, 0.0))
+
+        score = sum(w[k] * sc[k].fillna(0.0) for k in keys) / tot
+        score = score.clip(-1, 1).dropna()
+        score.name = "regime"
+        if score.empty:
+            raise ValueError("empty regime history")
+        return DataResult(score, is_sample=is_sample,
+                          source="derived" if not is_sample else "sample")
+    except Exception as exc:
+        return DataResult(None, is_sample=True, source="sample", note=str(exc)[:80])

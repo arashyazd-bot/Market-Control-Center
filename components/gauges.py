@@ -111,3 +111,32 @@ def regime_gauge(score: float, color: str) -> go.Figure:
     _add_extremes(fig, "◀ RISK-OFF", "RISK-ON ▶")
     _apply_layout(fig)
     return fig
+
+
+def cycle_gauge(position: float, color: str) -> go.Figure:
+    """Business-cycle clock: a 0-100 position over Early / Mid / Late / Recession
+    bands. Left extreme = Early (green/expansion), right = Recession (red)."""
+    fc = _font_color()
+    dark = _dark()
+    green = "#3FB950" if dark else "#1A7F37"
+    red = "#F4564A" if dark else "#C8102E"
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=position,
+        number={"valueformat": ".0f", "font": {"size": _GAUGE_NUMBER_SIZE, "color": color}},
+        gauge={
+            "axis": {"range": [0, 100], "tickvals": [0, 30, 55, 80, 100],
+                     "tickfont": {"size": 11, "color": fc}},
+            "bar": {"color": color, "thickness": 0.25},
+            "steps": [
+                {"range": [0, 30],   "color": "rgba(26,127,55,0.30)"},    # Early
+                {"range": [30, 55],  "color": "rgba(29,78,216,0.25)"},    # Mid
+                {"range": [55, 80],  "color": "rgba(194,65,12,0.32)"},    # Late
+                {"range": [80, 100], "color": "rgba(200,16,46,0.34)"},    # Recession
+            ],
+            "threshold": {"line": {"color": fc, "width": 3}, "value": position},
+        },
+    ))
+    _add_extremes(fig, "◀ EARLY", "RECESSION ▶", color_left=green, color_right=red)
+    _apply_layout(fig)
+    return fig
