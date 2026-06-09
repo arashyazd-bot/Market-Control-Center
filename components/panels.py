@@ -13,9 +13,11 @@ import plotly.graph_objects as go
 
 from components import charts, gauges
 from components.charts import c as chart_color
-from data import composite, fmp, fred, macro, markets, sentiment, valuation
+from data import (composite, cycle, fmp, fred, macro, markets, router, sentiment,
+                  valuation)
 from utils.formatting import (fmt_delta, fmt_num, good_bad_color,
                               percentile_label, valuation_verdict_good)
+from utils.summary import executive_summary
 
 try:  # attach the script context to worker threads so st.cache_data stays quiet
     from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
@@ -135,6 +137,14 @@ def _badge(*results) -> None:
         st.caption("🟢 live data")
 
 
+def _unavailable(result, what: str = "Live data") -> None:
+    """Explicit honest empty-state for a table/section whose source is sample —
+    no fabricated rows. States what's missing and why."""
+    info = _reason([result])
+    why = info[1] if info else "live source unavailable"
+    st.info(f"**{what} unavailable** — {why}. Shows live when the source is reachable.")
+
+
 def _mv(result, text: str) -> str:
     """Honest metric value — '—' when the source is sample, so no fabricated
     number is ever shown as if it were live."""
@@ -189,14 +199,81 @@ def _gauge_header(main: str, sub: str, sub_color: str | None = None) -> None:
 # ---------------------------------------------------------------------------
 # 1. Overview
 # ---------------------------------------------------------------------------
+def _top_mover():
+    """Biggest |1-day move| across headline assets (cache hits from the ticker)."""
+    best = None
+    for name, tk in [("S&P 500", "^GSPC"), ("Nasdaq", "^IXIC"), ("Dow", "^DJI"),
+                     ("Gold", "GC=F"), ("Bitcoin", "BTC-USD"), ("Oil", "CL=F")]:
+        q = markets.quote(tk)
+        if q.is_sample:
+            continue
+        chg = q.data.get("change_pct")
+        if chg is None or chg != chg:
+            continue
+        if best is None or abs(chg) > abs(best[1]):
+            best = (name, chg)
+    return best
+
+
+def _render_methodology(regime, cyc) -> None:
+    with st.expander("Methodology & live data sources"):
+        st.markdown("**Market regime** — weighted, normalized blend of the signals below "
+                    "(each scored −1 risk-off … +1 risk-on):")
+        comp = regime.data["components"]
+        st.dataframe(pd.DataFrame({
+            "Signal": list(comp.keys()),
+            "Sub-score": [round(v, 2) for v in comp.values()],
+            "Weight": [config.COMPOSITE_WEIGHTS[k] for k in comp],
+        }), hide_index=True, width="stretch")
+        st.markdown("**Business cycle** — deterministic rules over the yield-curve slope, "
+                    "high-yield credit spreads, recession probability, the Sahm rule and the "
+                    "unemployment trend. No models, no token cost.")
+        st.markdown("**Live data sources** — each value is served by the first reachable "
+                    "provider and tracked end-to-end:")
+        rs = router.status()
+        if rs:
+            rows = []
+            for s, v in sorted(rs.items()):
+                if v["cooldown"] > 0:
+                    state = f"🟡 cooldown {v['cooldown']}s"
+                elif v["note"] == "ok":
+                    state = "🟢 ok"
+                else:
+                    state = f"🟡 {v['note'][:46]}"
+                rows.append({"Source": s, "Status": state})
+            st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+        st.caption("Priority — macro: FRED → US Treasury → FMP · markets: FMP → Yahoo → Stooq "
+                   "→ CoinGecko · sentiment: CNN · then bundled sample (clearly marked).")
+
+
 def render_overview() -> None:
-    st.subheader("Market Regime — Single Pane of Glass")
     regime = composite.compute_regime()
+    cyc = cycle.compute_cycle()
     sp = markets.quote("^GSPC")
     vix = markets.quote("^VIX")
     spread = fred.get_series("spread_10y2y")
     fg = sentiment.get_fear_greed()
+    val = valuation.get_valuation()
 
+    # --- Executive summary (rule-based; zero token cost) ---
+    slope, sahm, hy = cyc.data["slope"], cyc.data["sahm"], cyc.data["hy"]
+    facts = {
+        "regime_label": None if regime.is_sample else regime.data["label"],
+        "regime_score": regime.data["score"],
+        "cycle_phase": None if cyc.is_sample else cyc.data["phase"],
+        "cycle_note": cyc.data["rationale"][0] if cyc.data["rationale"] else "",
+        "curve_inverted": slope == slope and slope < 0,
+        "sahm_triggered": sahm == sahm and sahm >= 0.5,
+        "credit_widening": hy == hy and hy > 5.0,
+        "cape": float("nan") if val.is_sample else val.data.get("cape", float("nan")),
+        "vix": float("nan") if vix.is_sample else vix.data["price"],
+        "top_mover": _top_mover(),
+    }
+    items = "".join(f"<li>{b}</li>" for b in executive_summary(facts))
+    st.markdown(f"<div class='mcc-exec'><div class='mcc-exec-h'>Executive Summary</div>"
+                f"<ul>{items}</ul></div>", unsafe_allow_html=True)
+
+    # --- KPI row ---
     k1, k2, k3, k4, k5 = st.columns(5)
     k1.metric("S&P 500", _mv(sp, fmt_num(sp.data["price"], 0)),
               _md(sp, fmt_delta(sp.data["change_pct"])))
@@ -208,28 +285,42 @@ def render_overview() -> None:
     k5.metric("Regime", _mv(regime, regime.data["label"]))
 
     st.divider()
-    g1, g2 = st.columns(2)
+    # --- Three dials: Regime | Business Cycle | Fear & Greed ---
+    g1, g2, g3 = st.columns(3)
     with g1:
         _gauge_header("Market Regime",
-                      "—" if regime.is_sample else regime.data["label"],
-                      regime.data["color"])
+                      "—" if regime.is_sample else regime.data["label"], regime.data["color"])
         _chart(gauges.regime_gauge(regime.data["score"], regime.data["color"]),
-               key="overview_regime", kind="gauge", sample=regime.is_sample)
+               key="ov_regime", kind="gauge", sample=regime.is_sample)
     with g2:
+        _gauge_header("Business Cycle",
+                      "—" if cyc.is_sample else cyc.data["phase"], cyc.data["color"])
+        _chart(gauges.cycle_gauge(cyc.data["position"], cyc.data["color"]),
+               key="ov_cycle", kind="gauge", sample=cyc.is_sample)
+    with g3:
         _gauge_header("Fear &amp; Greed", "—" if fg.is_sample else fg.data["rating"])
         _chart(gauges.fear_greed_gauge(fg.data["score"]),
-               key="overview_feargreed", kind="gauge", sample=fg.is_sample)
+               key="ov_fg", kind="gauge", sample=fg.is_sample)
 
-    with st.expander("How the regime score is built"):
-        comp = regime.data["components"]
-        comp_df = pd.DataFrame({
-            "Component": list(comp.keys()),
-            "Sub-score (-1..+1)": [round(v, 2) for v in comp.values()],
-            "Weight": [config.COMPOSITE_WEIGHTS[k] for k in comp],
-        })
-        st.dataframe(comp_df, hide_index=True, width="stretch")
-        st.caption("Positive = risk-on. Weighted blend → headline score. "
-                   "Tune weights/series in config.py.")
+    if not cyc.is_sample and cyc.data["rationale"]:
+        with st.expander("Why this cycle phase"):
+            for r in cyc.data["rationale"]:
+                st.markdown(f"- {r}")
+
+    st.divider()
+    # --- Composite regime history (backtest credibility) ---
+    st.markdown("##### Composite Regime — History vs Recessions")
+    hist = composite.regime_history()
+    if hist.data is not None and len(hist.data):
+        _chart(charts.spread_chart(hist.data,
+               "Composite Regime (monthly · −1 risk-off … +1 risk-on)",
+               y_suffix="", recessions=True), key="ov_regime_hist", sample=hist.is_sample)
+        st.caption("Reconstructed from the components with history (curve, credit, VIX, trend, "
+                   "Sahm). Shaded bands = NBER recessions.")
+    else:
+        _unavailable(hist, "Regime history")
+
+    _render_methodology(regime, cyc)
     _badge(regime, sp, vix, spread, fg)
 
 
@@ -383,11 +474,12 @@ def _render_leading_indicators() -> None:
                sample=sent.is_sample)
 
     # Upcoming high-impact US releases.
-    cal = fmp.get_economic_calendar()
+    cal = router.chain([("FMP", fmp.get_economic_calendar)])
     st.markdown("**Upcoming US economic releases**")
-    st.dataframe(cal.data, hide_index=True, width="stretch")
-    if cal.is_sample:
-        st.caption("🟡 sample calendar — live calendar needs an FMP Starter+ plan")
+    if cal.is_sample or cal.data is None:
+        _unavailable(cal, "Economic calendar")
+    else:
+        st.dataframe(cal.data, hide_index=True, width="stretch")
     _badge(sent, claims, mortgage, recprob)
 
 
@@ -438,76 +530,91 @@ def render_crossasset_politics() -> None:
 # ---------------------------------------------------------------------------
 def render_intelligence() -> None:
     st.subheader("Market Intelligence — Stock & Sector")
-    st.caption(f"Active source: **{macro.active_source()}** · stock-level data needs an FMP key")
+    st.caption("Stock & sector intelligence is FMP-only (no free fallback). Each feed shows "
+               "live data, or an explicit note when FMP's free-tier limit/tier blocks it.")
+
+    def _fmp(fn):   # route through the router for provenance + quota-skip; no sample
+        return router.chain([("FMP", fn)])
 
     # --- Sector valuation (P/E) ---
     st.markdown("##### Sector Valuation (trailing P/E)")
-    pe = fmp.get_sector_pe()
-    df_pe = pe.data.sort_values("pe")
-    colors = [chart_color("success") if v < 25 else
-              chart_color("yellow") if v < 40 else chart_color("danger")
-              for v in df_pe["pe"]]
-    fig = go.Figure(go.Bar(
-        x=df_pe["pe"], y=df_pe["sector"], orientation="h", marker_color=colors,
-        text=[f"{v:.0f}×" for v in df_pe["pe"]], textposition="outside"))
-    from components.charts import _layout as _cl
-    fig.update_layout(**_cl(height=280, margin=dict(l=28, r=28, t=14, b=21)))
-    fig.update_xaxes(title="Price / Earnings")
-    _chart(fig, key="intel_sector_pe", kind="static", sample=pe.is_sample)
-    st.caption("Green <25× · amber 25–40× · red >40× (richly valued)")
+    pe = _fmp(fmp.get_sector_pe)
+    if pe.is_sample or pe.data is None:
+        _unavailable(pe, "Sector P/E")
+    else:
+        df_pe = pe.data.sort_values("pe")
+        colors = [chart_color("success") if v < 25 else
+                  chart_color("yellow") if v < 40 else chart_color("danger")
+                  for v in df_pe["pe"]]
+        fig = go.Figure(go.Bar(
+            x=df_pe["pe"], y=df_pe["sector"], orientation="h", marker_color=colors,
+            text=[f"{v:.0f}×" for v in df_pe["pe"]], textposition="outside"))
+        from components.charts import _layout as _cl
+        fig.update_layout(**_cl(height=280, margin=dict(l=28, r=28, t=14, b=21)))
+        fig.update_xaxes(title="Price / Earnings")
+        _chart(fig, key="intel_sector_pe", kind="static")
+        st.caption("Green <25× · amber 25–40× · red >40× (richly valued)")
 
     # --- Analyst spotlight (watchlist) ---
     st.divider()
     st.markdown("##### Analyst Spotlight — Mega-Cap Watchlist")
-    consensus = [fmp.get_analyst_consensus(s) for s in config.ANALYST_WATCHLIST]
-    rows = [c.data for c in consensus]
-    table = pd.DataFrame([{
-        "Symbol": r["symbol"], "Rating": r["consensus"],
-        "Buy": r["buy"], "Hold": r["hold"], "Sell": r["sell"],
-        "Target Low": r["target_low"], "Target Cons.": r["target_consensus"],
-        "Target High": r["target_high"],
-    } for r in rows])
-
-    a1, a2 = st.columns([3, 2])
-    with a1:
-        fig2 = go.Figure()
-        syms = table["Symbol"]
-        fig2.add_bar(y=syms, x=table["Buy"], name="Buy", orientation="h",
-                     marker_color=chart_color("success"))
-        fig2.add_bar(y=syms, x=table["Hold"], name="Hold", orientation="h",
-                     marker_color=chart_color("yellow"))
-        fig2.add_bar(y=syms, x=table["Sell"], name="Sell", orientation="h",
-                     marker_color=chart_color("danger"))
-        from components.charts import _layout as _cl
-        fig2.update_layout(barmode="stack", title="Analyst ratings distribution",
-                           **_cl(height=224))
-        _chart(fig2, key="intel_ratings", kind="static",
-               sample=any(c.is_sample for c in consensus))
-    with a2:
-        st.dataframe(table[["Symbol", "Rating", "Target Cons."]],
-                     hide_index=True, width="stretch", height=320)
-    with st.expander("Full analyst price targets"):
-        st.dataframe(table, hide_index=True, width="stretch")
+    consensus = [_fmp(lambda s=s: fmp.get_analyst_consensus(s)) for s in config.ANALYST_WATCHLIST]
+    live_consensus = [c for c in consensus if not c.is_sample and c.data]
+    if not live_consensus:
+        _unavailable(consensus[0], "Analyst consensus")
+    else:
+        table = pd.DataFrame([{
+            "Symbol": r.data["symbol"], "Rating": r.data["consensus"],
+            "Buy": r.data["buy"], "Hold": r.data["hold"], "Sell": r.data["sell"],
+            "Target Low": r.data["target_low"], "Target Cons.": r.data["target_consensus"],
+            "Target High": r.data["target_high"],
+        } for r in live_consensus])
+        a1, a2 = st.columns([3, 2])
+        with a1:
+            fig2 = go.Figure()
+            syms = table["Symbol"]
+            fig2.add_bar(y=syms, x=table["Buy"], name="Buy", orientation="h",
+                         marker_color=chart_color("success"))
+            fig2.add_bar(y=syms, x=table["Hold"], name="Hold", orientation="h",
+                         marker_color=chart_color("yellow"))
+            fig2.add_bar(y=syms, x=table["Sell"], name="Sell", orientation="h",
+                         marker_color=chart_color("danger"))
+            from components.charts import _layout as _cl
+            fig2.update_layout(barmode="stack", title="Analyst ratings distribution",
+                               **_cl(height=224))
+            _chart(fig2, key="intel_ratings", kind="static")
+        with a2:
+            st.dataframe(table[["Symbol", "Rating", "Target Cons."]],
+                         hide_index=True, width="stretch", height=320)
+        with st.expander("Full analyst price targets"):
+            st.dataframe(table, hide_index=True, width="stretch")
 
     # --- Market movers ---
     st.divider()
     st.markdown("##### Today's Market Movers")
-    gainers = fmp.get_movers("gainers")
-    losers = fmp.get_movers("losers")
+    gainers = _fmp(lambda: fmp.get_movers("gainers"))
+    losers = _fmp(lambda: fmp.get_movers("losers"))
     g, l = st.columns(2)
     with g:
         st.markdown("**🟢 Top gainers**")
-        st.dataframe(gainers.data, hide_index=True, width="stretch")
+        if gainers.is_sample or gainers.data is None:
+            _unavailable(gainers, "Top gainers")
+        else:
+            st.dataframe(gainers.data, hide_index=True, width="stretch")
     with l:
         st.markdown("**🔴 Top losers**")
-        st.dataframe(losers.data, hide_index=True, width="stretch")
+        if losers.is_sample or losers.data is None:
+            _unavailable(losers, "Top losers")
+        else:
+            st.dataframe(losers.data, hide_index=True, width="stretch")
 
     # --- Congressional trades ---
     st.divider()
     st.markdown("##### Congressional Trading (Senate disclosures)")
-    congress = fmp.get_congressional_trades()
-    st.dataframe(congress.data, hide_index=True, width="stretch")
-    if congress.is_sample:
-        st.caption("🟡 sample — live Senate/House disclosures need an FMP Starter+ plan")
+    congress = _fmp(fmp.get_congressional_trades)
+    if congress.is_sample or congress.data is None:
+        _unavailable(congress, "Congressional trades")
+    else:
+        st.dataframe(congress.data, hide_index=True, width="stretch")
 
     _badge(pe, gainers, losers, congress, *consensus)
