@@ -156,6 +156,14 @@ def _md(result, text):
     return None if getattr(result, "is_sample", False) else text
 
 
+def _q(result, key, default=float("nan")):
+    """Safe field access — never crashes even if a feed returned data=None."""
+    try:
+        return result.data[key]
+    except Exception:
+        return default
+
+
 def _chart(fig, key: str, kind: str = "timeline", sample: bool = False) -> None:
     """Render a Plotly figure.
 
@@ -275,13 +283,13 @@ def render_overview() -> None:
 
     # --- KPI row ---
     k1, k2, k3, k4, k5 = st.columns(5)
-    k1.metric("S&P 500", _mv(sp, fmt_num(sp.data["price"], 0)),
-              _md(sp, fmt_delta(sp.data["change_pct"])))
-    k2.metric("VIX", _mv(vix, fmt_num(vix.data["price"], 2)),
-              _md(vix, fmt_delta(vix.data["change_pct"])), delta_color="inverse")
+    k1.metric("S&P 500", _mv(sp, fmt_num(_q(sp, "price"), 0)),
+              _md(sp, fmt_delta(_q(sp, "change_pct"))))
+    k2.metric("VIX", _mv(vix, fmt_num(_q(vix, "price"), 2)),
+              _md(vix, fmt_delta(_q(vix, "change_pct"))), delta_color="inverse")
     k3.metric("10Y–2Y Spread", _mv(spread, fmt_num(fred.latest(spread), 2, suffix="%")))
-    k4.metric("Fear & Greed", _mv(fg, fmt_num(fg.data["score"], 0)),
-              _md(fg, fg.data["rating"]), delta_color="off")
+    k4.metric("Fear & Greed", _mv(fg, fmt_num(_q(fg, "score"), 0)),
+              _md(fg, _q(fg, "rating", "")), delta_color="off")
     k5.metric("Regime", _mv(regime, regime.data["label"]))
 
     st.divider()
@@ -298,7 +306,8 @@ def render_overview() -> None:
         _chart(gauges.cycle_gauge(cyc.data["position"], cyc.data["color"]),
                key="ov_cycle", kind="gauge", sample=cyc.is_sample)
     with g3:
-        _gauge_header("Fear &amp; Greed", "—" if fg.is_sample else fg.data["rating"])
+        _gauge_header("Fear &amp; Greed", "—" if fg.is_sample else
+                      (fg.data["rating"] + (" · proxy" if fg.source == "proxy" else "")))
         _chart(gauges.fear_greed_gauge(fg.data["score"]),
                key="ov_fg", kind="gauge", sample=fg.is_sample)
 
@@ -371,7 +380,8 @@ def render_sentiment() -> None:
 
     c1, c2 = st.columns([1, 2])
     with c1:
-        _gauge_header("Fear &amp; Greed", "—" if fg.is_sample else fg.data["rating"])
+        _gauge_header("Fear &amp; Greed", "—" if fg.is_sample else
+                      (fg.data["rating"] + (" · proxy" if fg.source == "proxy" else "")))
         _chart(gauges.fear_greed_gauge(fg.data["score"]),
                key="sent_feargreed", kind="gauge", sample=fg.is_sample)
         st.metric("Breadth: Equal-wt − Cap-wt (YTD)",
@@ -494,8 +504,8 @@ def render_crossasset_politics() -> None:
     hist_results = []
     for col, (name, ticker) in zip(cols, config.CROSS_ASSET.items()):
         q = markets.quote(ticker)
-        col.metric(name, _mv(q, fmt_num(q.data["price"], 2)),
-                   _md(q, fmt_delta(q.data["change_pct"])))
+        col.metric(name, _mv(q, fmt_num(_q(q, "price"), 2)),
+                   _md(q, fmt_delta(_q(q, "change_pct"))))
         h = markets.price_history(ticker, period="1y")
         hist_results.append(h)
         series_map[name] = h.data["Close"]

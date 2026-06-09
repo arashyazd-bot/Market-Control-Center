@@ -49,7 +49,7 @@ def get_series(key: str, observation_start: str = "2018-01-01") -> DataResult:
         if s.empty:
             raise ValueError("empty series")
         s.name = key
-        return DataResult(s, is_sample=False)
+        return DataResult(s, is_sample=False, source="FRED")
     except Exception as exc:  # network / bad id / rate limit
         return DataResult(sample.fred_series(key), is_sample=True, note=str(exc)[:80])
 
@@ -68,7 +68,7 @@ def get_yield_curve() -> DataResult:
                 values[years] = float(s.iloc[-1])
         if not values:
             raise ValueError("no curve data")
-        return DataResult(pd.Series(values, name="yield_curve"), is_sample=False)
+        return DataResult(pd.Series(values, name="yield_curve"), is_sample=False, source="FRED")
     except Exception as exc:
         return DataResult(sample.yield_curve(), is_sample=True, note=str(exc)[:80])
 

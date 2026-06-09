@@ -127,6 +127,10 @@ def _yf_sector_performance() -> DataResult:
 
 @st.cache_data(ttl=config.TTL_MARKETS, show_spinner=False)
 def sector_performance() -> DataResult:
+    # NOTE: FMP is intentionally NOT chained here. The sector heatmap needs
+    # 1W/1M/3M/YTD windows, but FMP's sector-performance-snapshot only returns a
+    # single 1D average-change column — chaining it would feed the heatmap the
+    # wrong shape. yfinance computes the multi-window returns; sample is fallback.
     return router.chain([("yfinance", _yf_sector_performance)],
                         sample_fn=sample.sector_performance)
 
