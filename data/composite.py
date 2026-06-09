@@ -31,12 +31,15 @@ def label_for(score: float):
 
 @st.cache_data(ttl=config.TTL_MARKETS, show_spinner=False)
 def compute_regime() -> DataResult:
-    components = {}
-    is_sample = False
+    """Weighted blend of normalized sub-scores. Degrades gracefully: the score is
+    computed from the components that are LIVE (weights renormalized over them),
+    and only flagged sample if too little live signal remains — so one unreachable
+    feed (e.g. CNN Fear & Greed from a cloud IP) can't blank the whole regime."""
+    components, live = {}, {}
 
     # Yield-curve slope (10Y-2Y): inverted = risk-off.
     curve = macro.yield_curve()
-    is_sample |= curve.is_sample
+    live["yield_curve"] = not curve.is_sample
     try:
         slope = float(curve.data.get(10)) - float(curve.data.get(2))
     except Exception:
@@ -45,45 +48,53 @@ def compute_regime() -> DataResult:
 
     # Credit spreads (HY OAS): tight = risk-on.
     hy = macro.series("hy_oas")
-    is_sample |= hy.is_sample
+    live["credit"] = not hy.is_sample
     components["credit"] = _lin(macro.latest(hy), low_score_at=config.HY_OAS_WIDE,
                                 high_score_at=config.HY_OAS_TIGHT)
 
     # VIX: calm = risk-on.
     vix = markets.quote("^VIX")
-    is_sample |= vix.is_sample
+    live["vix"] = not vix.is_sample
     components["vix"] = _lin(vix.data["price"], low_score_at=config.VIX_PANIC,
                              high_score_at=config.VIX_CALM)
 
     # Fear & Greed: greed = risk-on.
     fg = sentiment.get_fear_greed()
-    is_sample |= fg.is_sample
+    live["fear_greed"] = not fg.is_sample
     components["fear_greed"] = _lin(fg.data["score"], low_score_at=0, high_score_at=100)
 
     # Trend: SP500 vs 200DMA.
     trend = markets.above_200dma(config.SPY)
-    is_sample |= trend.is_sample
+    live["trend"] = not trend.is_sample
     components["trend"] = _lin(trend.data, low_score_at=-10, high_score_at=10)
 
     # Valuation: cheap = risk-on (long-horizon tilt).
     val = valuation.get_valuation()
-    is_sample |= val.is_sample
+    live["valuation"] = not val.is_sample
     components["valuation"] = _lin(val.data["cape"], low_score_at=config.CAPE_EXPENSIVE,
                                    high_score_at=config.CAPE_CHEAP)
 
     # Sahm rule: < 0.5 = no recession trigger = risk-on.
     sahm = macro.series("sahm")
-    is_sample |= sahm.is_sample
+    live["sahm"] = not sahm.is_sample
     components["sahm"] = _lin(macro.latest(sahm), low_score_at=1.0, high_score_at=0.0)
 
-    # Weighted blend.
+    # Blend over LIVE components only, renormalized; flag sample only if <60% live.
     total_w = sum(config.COMPOSITE_WEIGHTS.values())
-    score = sum(config.COMPOSITE_WEIGHTS[k] * components[k] for k in config.COMPOSITE_WEIGHTS) / total_w
-    score = clamp(score)
+    live_w = sum(config.COMPOSITE_WEIGHTS[k] for k, ok in live.items() if ok)
+    if live_w >= 0.6 * total_w:
+        score = clamp(sum(config.COMPOSITE_WEIGHTS[k] * components[k]
+                          for k, ok in live.items() if ok) / live_w)
+        is_sample = False
+    else:  # too little live signal — fall back to the full (sample) blend
+        score = clamp(sum(config.COMPOSITE_WEIGHTS[k] * components[k]
+                          for k in config.COMPOSITE_WEIGHTS) / total_w)
+        is_sample = True
     label, color = label_for(score)
 
     return DataResult(
-        {"score": score, "label": label, "color": color, "components": components},
+        {"score": score, "label": label, "color": color, "components": components,
+         "live": live, "live_weight": round(live_w / total_w, 2)},
         is_sample=is_sample,
         source="derived" if not is_sample else "sample",
     )
