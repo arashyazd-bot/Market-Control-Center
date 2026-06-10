@@ -39,6 +39,7 @@ FRED_SERIES = {
     "cpi": "CPIAUCSL",
     "pce": "PCEPI",
     "m2": "M2SL",
+    "sofr": "SOFR",
     # labor
     "unemployment": "UNRATE",
     "initial_claims": "ICSA",
@@ -169,3 +170,7 @@ HY_OAS_TIGHT = 3.0       # %
 HY_OAS_WIDE = 8.0        # %
 CAPE_CHEAP = 15.0
 CAPE_EXPENSIVE = 33.0
+
+# Shiller CAPE historical distribution (1881–present) for percentile context in
+# the valuation panel. Hardcoded reference points — no extra data source needed.
+CAPE_HISTORY_REF = {"median": 16.0, "p75": 21.0, "p90": 27.6, "p95": 31.5}

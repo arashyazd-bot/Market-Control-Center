@@ -5,3 +5,5 @@ __pycache__/
 venv/
 .streamlit/secrets.toml
 .DS_Store
+# Local-only review/test artifacts — never pushed to GitHub (Render deploys from main)
+tests/

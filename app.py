@@ -435,9 +435,25 @@ def main() -> None:
         "🌍 Cross-Asset": panels.render_crossasset_politics,
         "💹 Intelligence": panels.render_intelligence,
     }
+    # Deep links: ?section=rates lands on Rates & Macro (shareable URLs).
+    slug_to_label = {"overview": "🧭 Overview", "valuation": "💰 Valuation",
+                     "sentiment": "😱 Sentiment", "rates": "📈 Rates & Macro",
+                     "cross-asset": "🌍 Cross-Asset", "intelligence": "💹 Intelligence"}
+    label_to_slug = {v: k for k, v in slug_to_label.items()}
+    if "active_section" not in st.session_state:
+        want = st.query_params.get("section")
+        if want in slug_to_label:
+            st.session_state.active_section = slug_to_label[want]
+
     active = st.radio("Section", list(sections), horizontal=True,
                       label_visibility="collapsed", key="active_section")
-    sections[active]()
+    st.query_params["section"] = label_to_slug.get(active, "overview")
+
+    # Cold-start UX: a free-tier instance can take ~60s to wake on first hit, and
+    # the first uncached fetch is the slowest — give honest feedback meanwhile.
+    with st.spinner("Loading live data… a free-tier instance may take up to ~60s "
+                    "to wake on the first request."):
+        sections[active]()
 
 
 if __name__ == "__main__":

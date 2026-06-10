@@ -190,6 +190,39 @@ def _chart(fig, key: str, kind: str = "timeline", sample: bool = False) -> None:
     else:
         cfg = _CONFIG_TIMELINE
     st.plotly_chart(fig, use_container_width=True, key=key, config=cfg)
+    # Workflow: one-click CSV export under every data chart (PNG already lives in
+    # the Plotly modebar camera). Skipped for gauges/heatmaps we can't flatten.
+    if kind != "gauge":
+        df = _fig_to_df(fig)
+        if df is not None and len(df):
+            try:
+                st.download_button("⬇ CSV", df.to_csv().encode(),
+                                   file_name=f"{key}.csv", mime="text/csv",
+                                   key=f"dl_{key}")
+            except Exception:
+                pass
+
+
+def _fig_to_df(fig):
+    """Best-effort tidy DataFrame from a Plotly figure's traces, for CSV export.
+    Pulls x/y from every scatter/bar trace; returns None for figures we can't
+    flatten (e.g. heatmaps/indicators) so the caller just skips the button."""
+    cols = {}
+    for i, tr in enumerate(getattr(fig, "data", []) or []):
+        x, y = getattr(tr, "x", None), getattr(tr, "y", None)
+        if x is None or y is None:
+            continue
+        name = getattr(tr, "name", None) or f"series{i + 1}"
+        try:
+            cols[name] = pd.Series(list(y), index=list(x))
+        except Exception:
+            continue
+    if not cols:
+        return None
+    try:
+        return pd.concat(cols, axis=1)
+    except Exception:
+        return None
 
 
 def _gauge_header(main: str, sub: str, sub_color: str | None = None) -> None:
@@ -228,11 +261,22 @@ def _render_methodology(regime, cyc) -> None:
         st.markdown("**Market regime** — weighted, normalized blend of the signals below "
                     "(each scored −1 risk-off … +1 risk-on):")
         comp = regime.data["components"]
+        total_w = sum(config.COMPOSITE_WEIGHTS[k] for k in comp) or 1.0
         st.dataframe(pd.DataFrame({
             "Signal": list(comp.keys()),
             "Sub-score": [round(v, 2) for v in comp.values()],
             "Weight": [config.COMPOSITE_WEIGHTS[k] for k in comp],
+            "Contribution": [round(v * config.COMPOSITE_WEIGHTS[k] / total_w, 3)
+                             for k, v in comp.items()],
         }), hide_index=True, width="stretch")
+        score = regime.data["score"]
+        edges = [e for band in config.REGIME_BANDS for e in band[:2]
+                 if -1 < e < 1]
+        if edges:
+            near = min(edges, key=lambda e: abs(score - e))
+            st.caption(f"Composite score **{score:+.2f}** · **{abs(score - near):.2f}** "
+                       f"from the nearest regime boundary ({near:+.2f}). "
+                       "Contribution = weight × sub-score (normalized).")
         st.markdown("**Business cycle** — deterministic rules over the yield-curve slope, "
                     "high-yield credit spreads, recession probability, the Sahm rule and the "
                     "unemployment trend. No models, no token cost.")
@@ -360,6 +404,11 @@ def render_valuation() -> None:
     c5.metric("Forward P/E", _mv(val, fmt_num(v["forward_pe"], 1)))
     c6.metric("Dividend Yield", _mv(val, fmt_num(v["dividend_yield"], 2, suffix="%")))
 
+    r = config.CAPE_HISTORY_REF
+    st.caption(f"**CAPE vs 1881–present:** median ≈ {r['median']:.0f}× · 75th ≈ "
+               f"{r['p75']:.0f}× · 90th ≈ {r['p90']:.0f}× · 95th ≈ {r['p95']:.0f}×. "
+               "Readings above the 90th percentile have historically preceded "
+               "below-average 10-year real returns.")
     st.info(
         "**Reading it:** CAPE > ~30 and Buffett Indicator > ~150% are historically "
         "rich, implying lower forward 10-year returns. A *negative* equity risk "
@@ -371,8 +420,49 @@ def render_valuation() -> None:
 # ---------------------------------------------------------------------------
 # 3. Sentiment & Internals
 # ---------------------------------------------------------------------------
+def _rsi(close: pd.Series, n: int = 14) -> pd.Series:
+    """Wilder-style RSI (simple-MA variant) — pure pandas, no extra data."""
+    d = close.diff()
+    up = d.clip(lower=0).rolling(n).mean()
+    dn = (-d.clip(upper=0)).rolling(n).mean()
+    rs = up / dn
+    rsi = 100 - 100 / (1 + rs)
+    return rsi.where(dn != 0, 100.0)  # no down moves in window → fully overbought
+
+
+def _render_tech_strip() -> None:
+    """S&P 500 trend/momentum posture from already-cached price history.
+    Pure pandas — zero additional API calls (answers the unanimous 'no
+    technical context anywhere' note)."""
+    h = markets.price_history("^GSPC", period="2y")
+    c = h.data["Close"].dropna() if (h.data is not None and "Close" in h.data) else None
+    if h.is_sample or c is None or len(c) < 200:
+        return
+    last = c.iloc[-1]
+    ma50, ma200 = c.rolling(50).mean().iloc[-1], c.rolling(200).mean().iloc[-1]
+    win = c.iloc[-252:]
+    hi52 = win.max()
+    dd = ((win / win.cummax() - 1) * 100).min()
+    rsi = _rsi(c).iloc[-1]
+    st.markdown("##### S&P 500 — Technical Posture")
+    t1, t2, t3, t4, t5 = st.columns(5)
+    t1.metric("vs 50-DMA", fmt_num((last / ma50 - 1) * 100, 1, suffix="%"),
+              "above = uptrend", delta_color="off")
+    t2.metric("vs 200-DMA", fmt_num((last / ma200 - 1) * 100, 1, suffix="%"),
+              "above = bull regime", delta_color="off")
+    t3.metric("% off 52wk high", fmt_num((last / hi52 - 1) * 100, 1, suffix="%"),
+              delta_color="off")
+    t4.metric("Max drawdown (1Y)", fmt_num(dd, 1, suffix="%"), delta_color="off")
+    t5.metric("RSI(14)", fmt_num(rsi, 0), "70+ overbought · 30− oversold",
+              delta_color="off")
+    st.caption("Computed from S&P 500 price history (no extra API calls). "
+               "Golden cross = 50-DMA above 200-DMA.")
+    st.divider()
+
+
 def render_sentiment() -> None:
     st.subheader("Sentiment & Market Internals")
+    _render_tech_strip()
     fg = sentiment.get_fear_greed()
     vix_hist = markets.price_history("^VIX", period="1y")
     sectors = markets.sector_performance()
@@ -405,7 +495,8 @@ def render_sentiment() -> None:
 # ---------------------------------------------------------------------------
 def render_rates_macro() -> None:
     st.subheader("Rates & Macro Cycle")
-    st.caption(f"Active macro source: **{macro.active_source()}** (FMP → FRED → sample)")
+    st.caption(f"Active macro source: **{macro.active_source()}** "
+               "(FRED → US Treasury → FMP → sample)")
     curve = macro.yield_curve()
     s_10y2y = macro.spread_series("s10y2y")
     s_10y3m = macro.spread_series("s10y3m")
@@ -450,8 +541,65 @@ def render_rates_macro() -> None:
     m3.metric("CPI YoY", _mv(cpi, fmt_num(macro.yoy_change(cpi), 1, suffix="%")))
     m4.metric("Fed Funds", _mv(ff, fmt_num(macro.latest(ff), 2, suffix="%")))
 
+    _render_inflation_money(cpi)
     _render_leading_indicators()
     _badge(curve, s_10y2y, s_10y3m, hy, ig, gdp, sp, unemp, sahm, cpi, ff)
+
+
+def _two_line(s1, label1, s2, label2, title, suffix="%"):
+    """Two same-axis series on one chart (e.g. real yield vs breakeven)."""
+    from components.charts import _layout as _cl
+    fig = go.Figure()
+    fig.add_scatter(x=list(s1.index), y=list(s1.values), name=label1,
+                    line=dict(color=chart_color("purple"), width=1.6))
+    fig.add_scatter(x=list(s2.index), y=list(s2.values), name=label2,
+                    line=dict(color=chart_color("warning"), width=1.6))
+    fig.update_layout(title=title, **_cl(height=240))
+    fig.update_yaxes(ticksuffix=suffix)
+    return fig
+
+
+def _render_inflation_money(cpi) -> None:
+    """Inflation expectations + money/activity — all FRED, the #1 analyst ask.
+    Real yield (DFII10) + breakeven (T10YIE) + M2/INDPRO YoY + CPI-vs-PCE."""
+    st.divider()
+    st.markdown("##### Inflation Expectations & Money")
+    real10 = macro.series("real_yield_10y")
+    brk10 = macro.series("breakeven_10y")
+    sofr = macro.series("sofr")
+    m2 = macro.series("m2")
+    indpro = macro.series("industrial_production")
+    pce = macro.series("pce")
+
+    i1, i2, i3, i4 = st.columns(4)
+    i1.metric("10Y Real Yield", _mv(real10, fmt_num(macro.latest(real10), 2, suffix="%")),
+              "TIPS · DFII10", delta_color="off")
+    i2.metric("10Y Breakeven", _mv(brk10, fmt_num(macro.latest(brk10), 2, suffix="%")),
+              "mkt inflation · T10YIE", delta_color="off")
+    i3.metric("M2 YoY", _mv(m2, fmt_num(macro.yoy_change(m2), 1, suffix="%")),
+              "money supply", delta_color="off")
+    i4.metric("Industrial Prod. YoY", _mv(indpro, fmt_num(macro.yoy_change(indpro), 1, suffix="%")),
+              "real activity", delta_color="off")
+
+    j1, j2 = st.columns(2)
+    with j1:
+        if not (real10.is_sample or brk10.is_sample):
+            _chart(_two_line(real10.data, "10Y real yield", brk10.data, "10Y breakeven",
+                             "Real Yield vs Breakeven Inflation"),
+                   key="rates_infl_exp", sample=False)
+        else:
+            _unavailable(real10, "Inflation expectations")
+    with j2:
+        cpi_yoy = (cpi.data.pct_change(12) * 100).dropna() if not cpi.is_sample else None
+        pce_yoy = (pce.data.pct_change(12) * 100).dropna() if not pce.is_sample else None
+        if cpi_yoy is not None and pce_yoy is not None:
+            _chart(_two_line(cpi_yoy, "CPI YoY", pce_yoy, "PCE YoY (Fed target)",
+                             "Inflation: CPI vs PCE"), key="rates_cpi_pce", sample=False)
+        else:
+            _unavailable(pce, "CPI vs PCE")
+    sofr_txt = _mv(sofr, fmt_num(macro.latest(sofr), 2, suffix="%"))
+    st.caption(f"Overnight funding (SOFR): **{sofr_txt}**. Breakeven = nominal − real "
+               "(market-priced inflation); PCE is the Fed's targeted gauge.")
 
 
 def _render_leading_indicators() -> None:
